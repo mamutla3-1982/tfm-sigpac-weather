@@ -1,23 +1,29 @@
-# ... (Mantenemos todos tus modelos y configuración anterior) ...
+# ... (Se mantiene todo tu código previo de Flask, SQLAlchemy y Auth)
 
-@app.route('/api/parcelas/<int:id>/clima', methods=['GET'])
+@app.route('/api/parcelas/<int:id>/datos_completos', methods=['GET'])
 @login_requerido
-def clima_parcela(id):
+def datos_completos_parcela(id):
+    # Buscamos la parcela del usuario
     p = Parcela.query.filter_by(id=id, user_id=request.current_user_id).first_or_404()
     
-    # AUMENTO: Simulación de cruce AEMET/Mateo basado en centroide
-    # En un entorno real, aquí llamaríamos a la API de AEMET con app.config['AEMET_API_KEY']
-    return jsonify({
-        "nombre": p.nombre,
-        "municipio": p.municipio,
-        "provincia": p.provincia,
-        "alertas": "Riesgo de escorrentía" if 25 > 20 else "Normal",
+    # AUMENTO: Simulación de datos cruzados SIGPAC + AEMET + MATEO
+    # Estos datos alimentarán automáticamente los 4 gráficos solicitados
+    datos_meteo = {
+        "info_sigpac": {
+            "provincia": p.provincia,
+            "municipio": p.municipio,
+            "cultivo": p.cultivo,
+            "superficie": p.superficie
+        },
         "graficos": {
-            "diario": [{"f": "00h", "v": 0.5}, {"f": "06h", "v": 12.0}, {"f": "12h", "v": 2.1}, {"f": "18h", "v": 0}],
-            "mensual": [{"f": "Ene", "v": 45}, {"f": "Feb", "v": 12}, {"f": "Mar", "v": 88}],
-            "anual": [{"f": "2023", "v": 520}, {"f": "2024", "v": 490}, {"f": "2025", "v": 510}],
+            "diario": [{"f": "08:00", "v": 1.5}, {"f": "14:00", "v": 0.8}, {"f": "20:00", "v": 2.2}],
+            "mensual": [{"f": "Sem 1", "v": 15}, {"f": "Sem 2", "v": 45}, {"f": "Sem 3", "v": 10}],
+            "anual": [{"f": "2024", "v": 520}, {"f": "2025", "v": 485}],
             "historico": [{"f": "Media 10 años", "v": 500}, {"f": "Actual", "v": 510}]
-        }
-    })
+        },
+        "alerta": "Riesgo de helada" if -2 < 0 else "Normal"
+    }
+    
+    return jsonify({"parcela": p.nombre, "data": datos_meteo})
 
-# ... (El resto de tus rutas de registro y login se mantienen intactas) ...
+# ... (Tus rutas de /api/auth/login y registro se quedan exactamente igual)
