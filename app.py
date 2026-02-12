@@ -12,6 +12,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'agro_2026_key')
 app.config['JWT_SECRET'] = os.environ.get('JWT_SECRET', 'jwt_agro_2026')
 app.config['AEMET_API_KEY'] = os.environ.get('AEMET_API_KEY', '')
 
+# Conexión PostgreSQL para Render
 uri = os.environ.get('DATABASE_URL', 'sqlite:///sigpac.db')
 if uri.startswith("postgres://"): uri = uri.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
@@ -39,7 +40,7 @@ class Parcela(db.Model):
 
 with app.app_context(): db.create_all()
 
-# AUTH MIDDLEWARE
+# MIDDLEWARE DE AUTENTICACIÓN
 def login_requerido(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -57,17 +58,20 @@ def index(): return render_template('index.html')
 @app.route('/api/auth/registro', methods=['POST'])
 def registro():
     data = request.json
+    if Usuario.query.filter_by(email=data['email']).first(): return jsonify({'error': 'Email ya existe'}), 400
     u = Usuario(username=data['username'], email=data['email'], password=generate_password_hash(data['password']))
     db.session.add(u); db.session.commit()
-    return jsonify({'token': jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])}), 201
+    token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
+    return jsonify({'token': token}), 201
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.json
-    u = Usuario.query.filter_by(email=data['emailOrUsername']).first()
+    u = Usuario.query.filter((Usuario.email == data['emailOrUsername']) | (Usuario.username == data['emailOrUsername'])).first()
     if u and check_password_hash(u.password, data['password']):
-        return jsonify({'token': jwt.encode({'user_id': u.id}, app.config['JWT_SECRET']), 'username': u.username})
-    return jsonify({'error': 'Error de acceso'}), 401
+        token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
+        return jsonify({'token': token, 'username': u.username})
+    return jsonify({'error': 'Credenciales incorrectas'}), 401
 
 @app.route('/api/parcelas', methods=['GET', 'POST'])
 @login_requerido
@@ -87,14 +91,4 @@ def gestionar_parcelas():
 @login_requerido
 def detalle_parcela(id):
     p = Parcela.query.get_or_404(id)
-    # Datos para los 4 gráficos solicitados
-    meteo = {
-        "diario": [{"f": "08h", "v": 0.5}, {"f": "14h", "v": 1.2}, {"f": "20h", "v": 0.3}],
-        "mensual": [{"f": "Sem 1", "v": 15}, {"f": "Sem 2", "v": 10}, {"f": "Sem 3", "v": 25}],
-        "anual": [{"f": "2024", "v": 450}, {"f": "2025", "v": 510}],
-        "historico": [{"f": "Media 10 años", "v": 480}, {"f": "Actual", "v": 500}]
-    }
-    return jsonify({'parcela': {'nombre': p.nombre, 'meteo': meteo}})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    # Datos para los 4 gráficos solicitados:
