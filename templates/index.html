@@ -199,3 +199,8 @@
     </script>
 </body>
 </html>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js')
+    .then(() => console.log("AgroApp lista para instalarse"))
+    .catch((err) => console.log("Error en PWA", err));
+}
