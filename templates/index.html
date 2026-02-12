@@ -6,154 +6,97 @@
     <title>SIGPAC Weather Pro</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link rel="manifest" href="/static/manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --accent: #2ecc71; --glass: rgba(255, 255, 255, 0.15); }
+        :root { --agro: #2ecc71; --glass: rgba(255, 255, 255, 0.12); }
         body { 
-            margin: 0; font-family: 'Segoe UI', sans-serif; height: 100vh;
+            margin: 0; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex;
             background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1920');
-            background-size: cover; background-attachment: fixed; color: white; display: flex;
+            background-size: cover; background-attachment: fixed; color: white;
         }
-        .sidebar { width: 400px; background: var(--glass); backdrop-filter: blur(15px); padding: 25px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.1); }
+        .sidebar { width: 380px; background: var(--glass); backdrop-filter: blur(15px); padding: 20px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.1); }
         #map { flex: 1; }
-        .card { background: rgba(0,0,0,0.4); border-radius: 15px; padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1); }
-        input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 8px; border: none; background: rgba(255,255,255,0.9); box-sizing: border-box; }
-        button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        button:hover { filter: brightness(1.1); }
-        .chart-box { background: white; border-radius: 10px; padding: 10px; margin-top: 15px; }
-        .grid-charts { display: grid; gap: 15px; }
+        .card { background: rgba(0,0,0,0.4); border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); }
+        input { width: 100%; padding: 10px; margin: 5px 0; border-radius: 6px; border: none; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border-radius: 6px; border: none; background: var(--agro); color: white; font-weight: bold; cursor: pointer; }
+        .chart-box { background: white; border-radius: 8px; padding: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <h2 style="margin-top:0">🌾 SIGPAC Weather</h2>
-        
-        <div id="auth-ui" class="card">
-            <div id="login-form">
-                <input id="auth_user" placeholder="Email o Usuario">
-                <input id="auth_pass" type="password" placeholder="Contraseña">
-                <button onclick="handleLogin()">Iniciar Sesión</button>
-                <p onclick="toggleAuth()" style="font-size:12px; cursor:pointer; text-align:center">¿No tienes cuenta? Regístrate</p>
-            </div>
-            <div id="reg-form" style="display:none">
-                <input id="reg_name" placeholder="Nombre completo">
-                <input id="reg_user" placeholder="Nombre de usuario">
-                <input id="reg_email" placeholder="Correo electrónico">
-                <input id="reg_pass" type="password" placeholder="Contraseña">
-                <input id="reg_pass_conf" type="password" placeholder="Confirmar contraseña">
-                <button onclick="handleRegistro()">Crear Cuenta</button>
-                <p onclick="toggleAuth()" style="font-size:12px; cursor:pointer; text-align:center">Ya tengo cuenta</p>
-            </div>
+        <h2>🌾 SIGPAC Weather</h2>
+        <div id="auth-ui">
+            <input id="email_login" placeholder="Email o Usuario">
+            <input id="pass_login" type="password" placeholder="Contraseña">
+            <button onclick="doLogin()">Entrar</button>
         </div>
-
         <div id="app-ui" style="display:none">
-            <div style="display:flex; justify-content:space-between; align-items:center">
-                <span id="welcome_msg"></span>
-                <button onclick="logout()" style="width:auto; padding:5px 10px; background:#e74c3c">Salir</button>
+            <div class="card">
+                <h4>📍 Nueva Parcela</h4>
+                <input id="p_nom" placeholder="Nombre Parcela">
+                <input id="p_prov" placeholder="Provincia (Auto)" readonly>
+                <input id="p_mun" placeholder="Municipio (Auto)" readonly>
+                <button onclick="saveParcela()">Guardar Parcela</button>
             </div>
-            
-            <div class="card" style="margin-top:15px">
-                <h4>➕ Nueva Parcela</h4>
-                <p style="font-size:11px">Dibuja en el mapa para auto-rellenar</p>
-                <input id="p_nombre" placeholder="Nombre de la parcela">
-                <input id="p_cultivo" placeholder="Tipo de cultivo (Ej: Olivar)">
-                <input id="p_prov" placeholder="Provincia" readonly>
-                <input id="p_mun" placeholder="Municipio" readonly>
-                <button onclick="guardarParcela()">Guardar en Perfil</button>
-            </div>
-
-            <h3>📋 Mis Parcelas</h3>
             <div id="lista-parcelas"></div>
         </div>
-
         <div id="detalles-ui" style="display:none">
-            <button onclick="cerrarDetalles()" style="background:#555; margin-bottom:15px">⬅ Volver al mapa</button>
-            <h3 id="det_nombre_p"></h3>
-            <div class="grid-charts">
-                <div class="chart-box"><canvas id="cDiario"></canvas></div>
-                <div class="chart-box"><canvas id="cMensual"></canvas></div>
-                <div class="chart-box"><canvas id="cAnual"></canvas></div>
-                <div class="chart-box"><canvas id="cHist"></canvas></div>
-            </div>
+            <button onclick="backToMap()" style="background:#444; margin-bottom:10px">⬅ Volver</button>
+            <h3 id="det_titulo"></h3>
+            <div class="chart-box"><canvas id="cDiario"></canvas></div>
+            <div class="chart-box"><canvas id="cMensual"></canvas></div>
+            <div class="chart-box"><canvas id="cAnual"></canvas></div>
+            <div class="chart-box"><canvas id="cHist"></canvas></div>
         </div>
     </div>
-
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script>
-        // Inicialización Mapa
-        var map = L.map('map').setView([37.88, -4.77], 13);
+        var map = L.map('map').setView([37.8, -4.7], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        var drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
-        var drawControl = new L.Control.Draw({
-            draw: { polygon: true, polyline: false, circle: false, marker: false, circlemarker: false },
-            edit: { featureGroup: drawnItems }
-        });
-        map.addControl(drawControl);
+        var drawnItems = new L.FeatureGroup().addTo(map);
+        var drawControl = new L.Control.Draw({ draw: { polygon: true, circle: false, marker: false, polyline: false, circlemarker: false }, edit: { featureGroup: drawnItems } }).addTo(map);
 
-        let tempCoords = null, tempCentroide = null;
-
-        // Auto-relleno SIGPAC / Geocoding
+        let lastCenter = null;
         map.on('draw:created', function (e) {
-            const layer = e.layer;
             drawnItems.clearLayers();
-            drawnItems.addLayer(layer);
-            
-            tempCoords = layer.getLatLngs();
-            tempCentroide = layer.getBounds().getCenter();
-
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${tempCentroide.lat}&lon=${tempCentroide.lng}`)
+            drawnItems.addLayer(e.layer);
+            lastCenter = e.layer.getBounds().getCenter();
+            // Autocompletado Geocoding
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lastCenter.lat}&lon=${lastCenter.lng}`)
                 .then(r => r.json()).then(data => {
                     document.getElementById('p_prov').value = data.address.state || '';
                     document.getElementById('p_mun').value = data.address.city || data.address.town || '';
                 });
         });
 
-        // Lógica de Gráficos (4 Niveles)
-        function verParcela(id) {
+        function verGraficos(id) {
             fetch(`/api/parcelas/${id}`, { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} })
                 .then(r => r.json()).then(data => {
                     document.getElementById('app-ui').style.display = 'none';
                     document.getElementById('detalles-ui').style.display = 'block';
-                    document.getElementById('det_nombre_p').innerText = data.parcela.nombre;
-                    
+                    document.getElementById('det_titulo').innerText = data.parcela.nombre;
                     const m = data.parcela.meteo;
-                    generarChart('cDiario', 'Diaria (mm)', m.diario, '#3498db');
-                    generarChart('cMensual', 'Mensual (mm)', m.mensual, '#2ecc71');
-                    generarChart('cAnual', 'Anual (mm)', m.anual, '#f1c40f');
-                    generarChart('cHist', 'Histórico (mm)', m.historico, '#e67e22');
+                    renderC('cDiario', 'Diaria', m.diario);
+                    renderC('cMensual', 'Mensual', m.mensual);
+                    renderC('cAnual', 'Anual', m.anual);
+                    renderC('cHist', 'Histórico', m.historico);
                 });
         }
 
-        function generarChart(canvasId, label, datos, color) {
-            new Chart(document.getElementById(canvasId), {
+        function renderC(id, label, datos) {
+            new Chart(document.getElementById(id), {
                 type: 'line',
-                data: {
-                    labels: datos.map(d => d.fecha),
-                    datasets: [{ label: label, data: datos.map(d => d.v), borderColor: color, fill: false }]
-                },
-                options: { responsive: true, plugins: { legend: { display: true } } }
+                data: { labels: datos.map(d => d.f), datasets: [{ label: label, data: datos.map(d => d.v), borderColor: '#2ecc71' }] }
             });
         }
 
-        // Funciones auxiliares (Login, Registro, etc.)
-        function toggleAuth() {
-            const l = document.getElementById('login-form'), r = document.getElementById('reg-form');
-            l.style.display = l.style.display === 'none' ? 'block' : 'none';
-            r.style.display = r.style.display === 'none' ? 'block' : 'none';
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/service-worker.js');
         }
-
-        function cerrarDetalles() {
-            document.getElementById('detalles-ui').style.display = 'none';
-            document.getElementById('app-ui').style.display = 'block';
-        }
-
-        // Aquí irían el resto de funciones handleLogin, handleRegistro y guardarParcela...
-        // (Son las mismas que ya te funcionan en el backend)
     </script>
 </body>
 </html>
