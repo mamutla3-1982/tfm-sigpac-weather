@@ -1,0 +1,24 @@
+{
+  "name": "SIGPAC Weather",
+  "short_name": "SIGPAC",
+  "description": "Gestión de parcelas SIGPAC con datos de lluvia de AEMET.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1e3d59",
+  "theme_color": "#1e3d59",
+  "orientation": "portrait-primary",
+
+  "icons": [
+    {
+      "src": "/static/img/marker-sigpacweather.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/img/marker-sigpacweather.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
