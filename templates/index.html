@@ -1,56 +1,44 @@
-<div id="stats-panel" class="card" style="display:none; margin-top:20px;">
-    <h3 id="stat-name" style="color:#C8943A"></h3>
-    <div id="info-cruzada" style="font-size:12px; margin-bottom:15px;"></div>
-    
-    <div class="chart-container"><canvas id="chartDiario"></canvas></div>
-    <div class="chart-container"><canvas id="chartMensual"></canvas></div>
-    <div class="chart-container"><canvas id="chartAnual"></canvas></div>
-    <div class="chart-container"><canvas id="chartHistorico"></canvas></div>
-    
-    <button onclick="document.getElementById('stats-panel').style.display='none'" style="background:#444">Cerrar</button>
-</div>
-
-<script>
-// AUMENTO: Lógica para mostrar la info de SIGPAC/AEMET y los 4 gráficos
+// AUMENTO: Función para arronar (lanzar) la información al hacer clic en una parcela
 async function verDetalles(id) {
-    const res = await fetch(`/api/parcelas/${id}`, {
+    const res = await fetch(`/api/parcelas/${id}/datos_completos`, {
         headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
     });
-    const data = await res.json();
-    
-    document.getElementById('stats-panel').style.display = 'block';
-    document.getElementById('stat-name').innerText = data.nombre;
-    document.getElementById('info-cruzada').innerHTML = `
-        <b>Provincia (SIGPAC):</b> ${data.info.sigpac.provincia}<br>
-        <b>Municipio:</b> ${data.info.sigpac.municipio}<br>
-        <b>Cultivo:</b> ${data.info.sigpac.cultivo}
+    const result = await res.json();
+    const d = result.data;
+
+    // Mostramos la información de la base de datos en el perfil
+    document.getElementById('det-panel').style.display = 'block';
+    document.getElementById('det-nombre').innerText = result.parcela;
+    document.getElementById('det-texto').innerHTML = `
+        <b>Provincia:</b> ${d.info_sigpac.provincia}<br>
+        <b>Municipio:</b> ${d.info_sigpac.municipio}<br>
+        <b>Cultivo:</b> ${d.info_sigpac.cultivo}
     `;
 
-    // Generar los 4 gráficos de lluvia
-    generarGrafico('chartDiario', 'Lluvia Diaria (mm)', data.info.lluvia_stats.diaria, '#C8943A');
-    generarGrafico('chartMensual', 'Lluvia Mensual (mm)', data.info.lluvia_stats.mensual, '#2ecc71');
-    generarGrafico('chartAnual', 'Lluvia Anual (mm)', data.info.lluvia_stats.anual, '#3498db');
-    generarGrafico('chartHistorico', 'Comparativa Histórica', data.info.lluvia_stats.historica, '#e74c3c');
+    // AUMENTO: Generación automática de los 4 gráficos de lluvia
+    pintarGrafico('chartDiario', 'Lluvia Diaria (mm)', d.graficos.diario, '#C8943A');
+    pintarGrafico('chartMensual', 'Acumulado Mensual', d.graficos.mensual, '#2ecc71');
+    pintarGrafico('chartAnual', 'Acumulado Anual', d.graficos.anual, '#3498db');
+    pintarGrafico('chartHist', 'Histórico 10 años', d.graficos.historico, '#e74c3c');
 }
 
-function generarGrafico(canvasId, etiqueta, puntos, color) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+function pintarGrafico(id, label, puntos, color) {
+    const ctx = document.getElementById(id).getContext('2d');
     new Chart(ctx, {
         type: 'line',
         data: {
             labels: puntos.map(p => p.f),
             datasets: [{
-                label: etiqueta,
+                label: label,
                 data: puntos.map(p => p.v),
                 borderColor: color,
-                tension: 0.3,
+                tension: 0.4,
                 fill: false
             }]
         },
         options: {
-            scales: { y: { beginAtZero: true, ticks: {color: 'white'} }, x: { ticks: {color: 'white'} } },
+            scales: { y: { ticks: {color: 'white'} }, x: { ticks: {color: 'white'} } },
             plugins: { legend: { labels: {color: 'white'} } }
         }
     });
 }
-</script>
