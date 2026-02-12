@@ -19,9 +19,34 @@ body { margin:0; font-family:Arial; background:#eef2f3; }
 .header h2 img { height:32px; margin-right:10px; }
 .view { display:none; padding:20px; }
 .view.active { display:block; }
-#map { height:60vh; width:100%; margin-top:10px; }
+#map { width:100%; height:100%; }
+
+/* tarjetas parcelas */
 .parcela-card { width:250px; padding:15px; border:1px solid #ccc; border-radius:8px; background:white; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
 .parcela-card img { width:40px; float:right; }
+
+/* layout moderno visor */
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: calc(100vh - 120px); /* cabecera + margen */
+  gap:0;
+}
+
+.sidebar {
+  background:#f7f9fb;
+  border-right:1px solid #dde3ea;
+  padding:15px;
+  overflow-y:auto;
+}
+
+.card {
+  background:white;
+  border-radius:10px;
+  padding:10px;
+  margin-bottom:12px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.06);
+}
 </style>
 </head>
 
@@ -43,7 +68,7 @@ body { margin:0; font-family:Arial; background:#eef2f3; }
 <!-- HOME -->
 <div id="view-home" class="view active">
     <h1>Bienvenido a SIGPAC Weather</h1>
-    <p>Gestiona tus parcelas y consulta lluvia AEMET.</p>
+    <p>Gestiona tus parcelas y consulta lluvia.</p>
 </div>
 
 <!-- LOGIN -->
@@ -64,17 +89,45 @@ body { margin:0; font-family:Arial; background:#eef2f3; }
     <button onclick="hacerRegistro()">Registrar</button>
 </div>
 
-<!-- APP -->
+<!-- APP PRINCIPAL -->
 <div id="view-app" class="view">
-    <button onclick="guardarParcela()">Guardar Parcela</button>
+    <button onclick="guardarParcela()">Guardar Parcela dibujada</button>
     <button onclick="cargarParcelas()">Ver Mis Parcelas</button>
 
-    <div id="map"></div>
+    <!-- layout moderno: sidebar + mapa -->
+    <div class="layout">
+        <div class="sidebar" id="sidebar">
+            <h2 id="parcela-nombre">Selecciona una parcela en el mapa</h2>
+            <p id="parcela-info"></p>
 
-    <p><strong>Área:</strong> <span id="area">0</span> ha</p>
+            <div class="card">
+                <h3>Lluvia diaria</h3>
+                <canvas id="grafico-diario"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Lluvia mensual</h3>
+                <canvas id="grafico-mensual"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Lluvia acumulada</h3>
+                <canvas id="grafico-acumulada"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Comparativa anual</h3>
+                <canvas id="grafico-comparativa"></canvas>
+            </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <!-- info de la parcela guardada + gráfico antiguo (lo mantenemos) -->
+    <p><strong>Área dibujada:</strong> <span id="area">0</span> ha</p>
     <p id="detalle-parcela"></p>
     <div id="lluvia-info"></div>
-
     <canvas id="grafico-lluvia" width="400" height="200"></canvas>
 </div>
 
