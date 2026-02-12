@@ -1,41 +1,92 @@
-/* ----- Estilos básicos generales ----- */
 body {
     margin: 0;
-    padding: 0;
-    font-family: Arial, sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f4f6f3;
 }
 
-/* ----- Contenedor principal ----- */
-.container {
-    width: 90%;
-    margin: 0 auto;
+/* Barra superior */
+.bg-agro {
+    background: #2f6b3a;
 }
 
-/* ----- Mapa SIGPAC ----- */
-#map {
-    height: 600px;   /* Ajusta si quieres un mapa más grande */
-    width: 100%;
-    border: 2px solid #333;
-    border-radius: 6px;
-    margin-top: 20px;
+.text-agro {
+    color: #2f6b3a;
 }
 
-/* ----- Encabezados ----- */
-h1, h2, h3 {
-    font-weight: 600;
-    margin-bottom: 10px;
-}
-
-/* ----- Botones ----- */
-button {
-    background-color: #2c6e91;
-    color: white;
-    padding: 10px 16px;
+.btn-agro {
+    background: #2f6b3a;
+    color: #fff;
+    border-radius: 999px;
     border: none;
-    border-radius: 5px;
-    cursor: pointer;
 }
 
-button:hover {
-    background-color: #245a75;
+.btn-agro:hover {
+    background: #24522c;
+    color: #fff;
+}
+
+.btn-outline-agro {
+    border-radius: 999px;
+    border: 1px solid #2f6b3a;
+    color: #2f6b3a;
+}
+
+.btn-outline-agro:hover {
+    background: #2f6b3a;
+    color: #fff;
+}
+
+/* Mapa */
+#map {
+    height: calc(100vh - 56px);
+    width: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+    position: absolute;
+    top: 80px;
+    left: 20px;
+    width: 320px;
+    background: #ffffff;
+    padding: 16px 18px;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    z-index: 1000;
+    border-left: 4px solid #2f6b3a;
+}
+
+/* Panel inferior */
+.panel-inferior {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    z-index: 1000;
+}
+
+.card-agro {
+    min-width: 260px;
+    max-width: 320px;
+    border-radius: 14px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .sidebar {
+        width: calc(100% - 40px);
+        left: 20px;
+        top: 70px;
+    }
+
+    .panel-inferior {
+        left: 20px;
+        right: 20px;
+        bottom: 10px;
+        flex-direction: column;
+    }
 }
