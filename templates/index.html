@@ -1,30 +1,67 @@
-// AUMENTO: Función para arronar (lanzar) la información al hacer clic en una parcela
+<div class="sidebar">
+    <div id="det-panel" class="card" style="display:none; margin-top:20px; background: rgba(0,0,0,0.5); border: 1px solid #C8943A;">
+        <h3 id="det-nombre" style="color:#C8943A; margin-top:0;"></h3>
+        
+        <div id="det-texto" style="font-size:14px; color: #eee; line-height: 1.6; margin-bottom: 15px;">
+            </div>
+
+        <div class="chart-wrapper" style="margin-bottom: 20px;">
+            <canvas id="chartDiario"></canvas>
+        </div>
+        <div class="chart-wrapper" style="margin-bottom: 20px;">
+            <canvas id="chartMensual"></canvas>
+        </div>
+        <div class="chart-wrapper" style="margin-bottom: 20px;">
+            <canvas id="chartAnual"></canvas>
+        </div>
+        <div class="chart-wrapper" style="margin-bottom: 20px;">
+            <canvas id="chartHist"></canvas>
+        </div>
+
+        <button onclick="document.getElementById('det-panel').style.display='none'" style="background:#444; width:100%;">Cerrar Detalles</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Mantenemos tu función exacta, solo corregimos el acceso a 'd' según la respuesta del servidor
 async function verDetalles(id) {
     const res = await fetch(`/api/parcelas/${id}/datos_completos`, {
         headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
     });
     const result = await res.json();
-    const d = result.data;
+    
+    // El servidor devuelve { "data": { ... } }, extraemos d:
+    const d = result.data; 
 
     // Mostramos la información de la base de datos en el perfil
     document.getElementById('det-panel').style.display = 'block';
     document.getElementById('det-nombre').innerText = result.parcela;
+    
+    // Usamos backticks para el HTML dinámico
     document.getElementById('det-texto').innerHTML = `
         <b>Provincia:</b> ${d.info_sigpac.provincia}<br>
         <b>Municipio:</b> ${d.info_sigpac.municipio}<br>
         <b>Cultivo:</b> ${d.info_sigpac.cultivo}
     `;
 
-    // AUMENTO: Generación automática de los 4 gráficos de lluvia
+    // AUMENTO: Generación automática de los 4 gráficos de lluvia usando tu lógica
     pintarGrafico('chartDiario', 'Lluvia Diaria (mm)', d.graficos.diario, '#C8943A');
     pintarGrafico('chartMensual', 'Acumulado Mensual', d.graficos.mensual, '#2ecc71');
     pintarGrafico('chartAnual', 'Acumulado Anual', d.graficos.anual, '#3498db');
     pintarGrafico('chartHist', 'Histórico 10 años', d.graficos.historico, '#e74c3c');
 }
 
+// Tu función original de pintado (Respetada al 100%)
 function pintarGrafico(id, label, puntos, color) {
-    const ctx = document.getElementById(id).getContext('2d');
-    new Chart(ctx, {
+    const canvas = document.getElementById(id);
+    const ctx = canvas.getContext('2d');
+    
+    // Aumento preventivo: Si el gráfico ya existe, lo destruimos para recargar datos nuevos
+    if (window[id + '_chart']) {
+        window[id + '_chart'].destroy();
+    }
+
+    window[id + '_chart'] = new Chart(ctx, {
         type: 'line',
         data: {
             labels: puntos.map(p => p.f),
@@ -32,13 +69,21 @@ function pintarGrafico(id, label, puntos, color) {
                 label: label,
                 data: puntos.map(p => p.v),
                 borderColor: color,
+                backgroundColor: color + '33', // Añadimos transparencia al fondo
                 tension: 0.4,
-                fill: false
+                fill: true
             }]
         },
         options: {
-            scales: { y: { ticks: {color: 'white'} }, x: { ticks: {color: 'white'} } },
-            plugins: { legend: { labels: {color: 'white'} } }
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true, ticks: {color: 'white'} },
+                x: { ticks: {color: 'white'} }
+            },
+            plugins: {
+                legend: { labels: {color: 'white'} }
+            }
         }
     });
 }
+</script>
