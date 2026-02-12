@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_sqlalchemy import SQLAlchemy  # CAMBIO: SQLAlchemy en lugar de PyMongo
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime, timedelta
@@ -15,7 +15,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'sigpac_weather_2026_sec
 app.config['JWT_SECRET'] = os.environ.get('JWT_SECRET', 'jwt_secret_2026')
 app.config['AEMET_API_KEY'] = os.environ.get('AEMET_API_KEY', '')
 
-# CAMBIO: Configuración para PostgreSQL (Render)
+# Configuración para PostgreSQL (Render)
 uri = os.environ.get('DATABASE_URL', 'sqlite:///sigpac.db')
 if uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
@@ -24,7 +24,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# ── MODELOS DE BASE DE DATOS (NUEVO) ──
+# ── MODELOS DE BASE DE DATOS ──
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -44,18 +44,18 @@ class Parcela(db.Model):
     parcela_num = db.Column(db.String(50))
     cultivo = db.Column(db.String(100))
     superficie = db.Column(db.Float, default=0.0)
-    coordenadas = db.Column(db.Text) # Guardamos JSON como texto
-    centroide = db.Column(db.Text)    # Guardamos JSON como texto
+    coordenadas = db.Column(db.Text) 
+    centroide = db.Column(db.Text)    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Crear las tablas automáticamente
 with app.app_context():
     db.create_all()
 
-# ── FUNCIONES JWT (IGUAL QUE ANTES) ──
+# ── FUNCIONES JWT ──
 def crear_token(user_id):
     payload = {
-        'user_id': int(user_id), # Aseguramos que sea entero para SQL
+        'user_id': int(user_id),
         'exp': datetime.utcnow() + timedelta(days=30)
     }
     return jwt.encode(payload, app.config['JWT_SECRET'], algorithm='HS256')
@@ -80,7 +80,7 @@ def login_requerido(f):
         return jsonify({'error': 'No autorizado'}), 401
     return decorated
 
-# ── RUTAS ESTÁTICAS Y HTML (IGUAL) ──
+# ── RUTAS ESTÁTICAS Y HTML ──
 @app.route('/static/<path:filename>')
 def static_files(filename):
     return send_from_directory('static', filename)
@@ -89,7 +89,7 @@ def static_files(filename):
 def index():
     return render_template('index.html')
 
-# ── API AUTENTICACIÓN (MODIFICADA PARA SQL) ──
+# ── API AUTENTICACIÓN ──
 @app.route('/api/auth/registro', methods=['POST'])
 def registro():
     data = request.json
@@ -100,7 +100,6 @@ def registro():
     if data['password'] != data['passwordConfirm']:
         return jsonify({'error': 'Las contraseñas no coinciden'}), 400
     
-    # CAMBIO: Consulta SQL
     if Usuario.query.filter_by(email=data['email'].lower()).first():
         return jsonify({'error': 'Ya existe una cuenta con ese email'}), 400
     
@@ -131,7 +130,6 @@ def registro():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.json
-    # CAMBIO: Búsqueda con SQLAlchemy
     login_id = data.get('emailOrUsername', '').lower()
     usuario = Usuario.query.filter((Usuario.email == login_id) | (Usuario.username == data.get('emailOrUsername'))).first()
     
@@ -149,29 +147,11 @@ def login():
         }
     })
 
-@app.route('/api/auth/perfil')
-@login_requerido
-def perfil():
-    usuario = Usuario.query.get(request.current_user_id)
-    if not usuario:
-        return jsonify({'error': 'Usuario no encontrado'}), 404
-    
-    return jsonify({
-        'usuario': {
-            'id': usuario.id,
-            'username': usuario.username,
-            'nombre': usuario.nombre,
-            'email': usuario.email
-        }
-    })
-
-# ── API PARCELAS (MODIFICADA PARA SQL) ──
+# ── API PARCELAS ──
 @app.route('/api/parcelas', methods=['GET'])
 @login_requerido
 def obtener_parcelas():
-    # CAMBIO: Consulta SQL filtrada por usuario
     parcelas_db = Parcela.query.filter_by(user_id=request.current_user_id).all()
-    
     parcelas = []
     for p in parcelas_db:
         parcelas.append({
@@ -184,4 +164,49 @@ def obtener_parcelas():
             'cultivo': p.cultivo,
             'superficie': p.superficie,
             'coordenadas': json.loads(p.coordenadas) if p.coordenadas else None,
-            'centroide': json.loads(p.centroide) if p.centroide
+            'centroide': json.loads(p.centroide) if p.centroide else None
+        })
+    return jsonify({'parcelas': parcelas})
+
+@app.route('/api/parcelas', methods=['POST'])
+@login_requerido
+def crear_parcela():
+    data = request.json
+    nueva_p = Parcela(
+        user_id=request.current_user_id,
+        nombre=data.get('nombre'),
+        provincia=data.get('provincia', ''),
+        municipio=data.get('municipio', ''),
+        poligono=data.get('poligono', ''),
+        parcela_num=data.get('parcela_num', ''),
+        cultivo=data.get('cultivo', ''),
+        superficie=data.get('superficie', 0),
+        coordenadas=json.dumps(data.get('coordenadas')),
+        centroide=json.dumps(data.get('centroide'))
+    )
+    db.session.add(nueva_p)
+    db.session.commit()
+    return jsonify({'mensaje': 'Parcela creada', 'id': nueva_p.id}), 201
+
+@app.route('/api/parcelas/<int:parcela_id>', methods=['DELETE'])
+@login_requerido
+def eliminar_parcela(parcela_id):
+    p = Parcela.query.filter_by(id=parcela_id, user_id=request.current_user_id).first()
+    if not p:
+        return jsonify({'error': 'Parcela no encontrada'}), 404
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify({'mensaje': 'Parcela eliminada'})
+
+# ── FUNCIONES METEO (Simuladas para el ejemplo) ──
+def generar_datos_lluvia_diaria():
+    import random
+    return [{'fecha': (datetime.now() - timedelta(days=i)).strftime('%d/%m'), 'lluvia': round(random.uniform(0, 10), 1)} for i in range(30)]
+
+@app.route('/api/health')
+def health():
+    return jsonify({'status': 'ok', 'db': 'connected'})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
