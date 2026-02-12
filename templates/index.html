@@ -26,23 +26,28 @@
 <body>
     <div class="sidebar">
         <h2>🌾 SIGPAC Weather</h2>
+        
         <div id="auth-ui">
             <input id="email_login" placeholder="Email o Usuario">
             <input id="pass_login" type="password" placeholder="Contraseña">
-            <button onclick="doLogin()">Entrar</button>
+            <button onclick="doLogin()">Entrar / Registro</button>
         </div>
+
         <div id="app-ui" style="display:none">
             <div class="card">
                 <h4>📍 Nueva Parcela</h4>
+                <p style="font-size:11px">Dibuja en el mapa para auto-rellenar municipio</p>
                 <input id="p_nom" placeholder="Nombre Parcela">
                 <input id="p_prov" placeholder="Provincia (Auto)" readonly>
                 <input id="p_mun" placeholder="Municipio (Auto)" readonly>
                 <button onclick="saveParcela()">Guardar Parcela</button>
             </div>
             <div id="lista-parcelas"></div>
+            <button onclick="logout()" style="background:#e74c3c; margin-top:10px">Cerrar Sesión</button>
         </div>
+
         <div id="detalles-ui" style="display:none">
-            <button onclick="backToMap()" style="background:#444; margin-bottom:10px">⬅ Volver</button>
+            <button onclick="backToMap()" style="background:#444; margin-bottom:10px">⬅ Volver al Mapa</button>
             <h3 id="det_titulo"></h3>
             <div class="chart-box"><canvas id="cDiario"></canvas></div>
             <div class="chart-box"><canvas id="cMensual"></canvas></div>
@@ -65,7 +70,8 @@
             drawnItems.clearLayers();
             drawnItems.addLayer(e.layer);
             lastCenter = e.layer.getBounds().getCenter();
-            // Autocompletado Geocoding
+            
+            // Autocompletado Geocoding al dibujar
             fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lastCenter.lat}&lon=${lastCenter.lng}`)
                 .then(r => r.json()).then(data => {
                     document.getElementById('p_prov').value = data.address.state || '';
@@ -79,18 +85,19 @@
                     document.getElementById('app-ui').style.display = 'none';
                     document.getElementById('detalles-ui').style.display = 'block';
                     document.getElementById('det_titulo').innerText = data.parcela.nombre;
+                    
                     const m = data.parcela.meteo;
-                    renderC('cDiario', 'Diaria', m.diario);
-                    renderC('cMensual', 'Mensual', m.mensual);
-                    renderC('cAnual', 'Anual', m.anual);
-                    renderC('cHist', 'Histórico', m.historico);
+                    renderChart('cDiario', 'Lluvia Diaria (mm)', m.diario);
+                    renderChart('cMensual', 'Lluvia Mensual (mm)', m.mensual);
+                    renderChart('cAnual', 'Acumulado Anual', m.anual);
+                    renderChart('cHist', 'Histórico SIGPAC', m.historico);
                 });
         }
 
-        function renderC(id, label, datos) {
+        function renderChart(id, label, datos) {
             new Chart(document.getElementById(id), {
                 type: 'line',
-                data: { labels: datos.map(d => d.f), datasets: [{ label: label, data: datos.map(d => d.v), borderColor: '#2ecc71' }] }
+                data: { labels: datos.map(d => d.f), datasets: [{ label: label, data: datos.map(d => d.v), borderColor: '#2ecc71', tension: 0.3 }] }
             });
         }
 
