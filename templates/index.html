@@ -6,104 +6,200 @@
     <title>SIGPAC Weather Pro</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <link rel="manifest" href="/static/manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --agro: #2ecc71; --glass: rgba(255, 255, 255, 0.12); }
-        body { 
-            margin: 0; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex;
-            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1920');
-            background-size: cover; background-attachment: fixed; color: white;
-        }
-        .sidebar { width: 380px; background: var(--glass); backdrop-filter: blur(15px); padding: 20px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.1); }
-        #map { flex: 1; }
-        .card { background: rgba(0,0,0,0.4); border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); }
-        input { width: 100%; padding: 10px; margin: 5px 0; border-radius: 6px; border: none; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; border-radius: 6px; border: none; background: var(--agro); color: white; font-weight: bold; cursor: pointer; }
+        :root { --accent: #C8943A; --dark: #1a1a1a; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex; overflow: hidden; background: #000; color: white; }
+        
+        /* Pantalla de Inicio Informativa */
+        #hero-overlay { position: fixed; inset: 0; z-index: 9999; background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=1920'); background-size: cover; display: flex; align-items: center; justify-content: center; text-align: center; }
+        .hero-content { max-width: 600px; padding: 40px; background: rgba(0,0,0,0.8); border: 2px solid var(--accent); border-radius: 20px; }
+
+        .sidebar { width: 380px; background: rgba(20,20,20,0.95); border-right: 1px solid var(--accent); padding: 20px; overflow-y: auto; z-index: 100; }
+        #map { flex: 1; z-index: 1; }
+        
+        .card { background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 10px; padding: 15px; margin-bottom: 15px; }
+        input { width: 100%; padding: 10px; margin: 5px 0; background: #222; border: 1px solid #444; color: white; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: var(--accent); border: none; color: white; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
         .chart-box { background: white; border-radius: 8px; padding: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>🌾 SIGPAC Weather</h2>
-        
-        <div id="auth-ui">
-            <input id="email_login" placeholder="Email o Usuario">
-            <input id="pass_login" type="password" placeholder="Contraseña">
-            <button onclick="doLogin()">Entrar / Registro</button>
-        </div>
 
-        <div id="app-ui" style="display:none">
-            <div class="card">
-                <h4>📍 Nueva Parcela</h4>
-                <p style="font-size:11px">Dibuja en el mapa para auto-rellenar municipio</p>
-                <input id="p_nom" placeholder="Nombre Parcela">
-                <input id="p_prov" placeholder="Provincia (Auto)" readonly>
-                <input id="p_mun" placeholder="Municipio (Auto)" readonly>
-                <button onclick="saveParcela()">Guardar Parcela</button>
+    <div id="hero-overlay">
+        <div class="hero-content">
+            <h1 style="color:var(--accent)">SIGPAC Weather</h1>
+            <p>Gestión agrícola inteligente con datos de AEMET y SIGPAC en tiempo real.</p>
+            <div id="auth-forms">
+                <div id="login-ui">
+                    <input id="l_user" placeholder="Email o Usuario">
+                    <input id="l_pass" type="password" placeholder="Contraseña">
+                    <button onclick="handleAuth('/api/auth/login')">Iniciar Sesión</button>
+                    <p onclick="toggleAuth()" style="cursor:pointer; font-size:12px; margin-top:10px">¿Nuevo? Regístrate aquí</p>
+                </div>
+                <div id="reg-ui" style="display:none">
+                    <input id="r_user" placeholder="Nombre de Usuario">
+                    <input id="r_email" placeholder="Correo Electrónico">
+                    <input id="r_pass" type="password" placeholder="Contraseña">
+                    <input id="r_conf" type="password" placeholder="Confirmar Contraseña">
+                    <button onclick="handleAuth('/api/auth/registro')">Crear Cuenta</button>
+                    <p onclick="toggleAuth()" style="cursor:pointer; font-size:12px; margin-top:10px">Ya tengo cuenta</p>
+                </div>
             </div>
-            <div id="lista-parcelas"></div>
-            <button onclick="logout()" style="background:#e74c3c; margin-top:10px">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div class="sidebar" id="main-sidebar" style="display:none">
+        <div style="display:flex; justify-content:space-between; align-items:center">
+            <h3 style="color:var(--accent)">Mi Perfil</h3>
+            <span onclick="logout()" style="cursor:pointer; color:#ff4d4d; font-size:12px">Cerrar Sesión 🚪</span>
         </div>
 
-        <div id="detalles-ui" style="display:none">
-            <button onclick="backToMap()" style="background:#444; margin-bottom:10px">⬅ Volver al Mapa</button>
-            <h3 id="det_titulo"></h3>
+        <div id="draw-tools" class="card">
+            <h4>✏️ Nueva Parcela</h4>
+            <p style="font-size:11px">Dibuja el polígono en el mapa para empezar.</p>
+            <input id="p_nombre" placeholder="Nombre de la parcela (Ej: El Olivar)">
+            <input id="p_cultivo" placeholder="Tipo de cultivo">
+            <input id="p_prov" placeholder="Provincia (Auto)" readonly>
+            <input id="p_mun" placeholder="Municipio (Auto)" readonly>
+            <button onclick="saveParcela()">Guardar Parcela</button>
+        </div>
+
+        <h4>📍 TUS PARCELAS</h4>
+        <div id="parcelas-lista"></div>
+
+        <div id="stats-section" style="display:none">
+            <hr border="1" color="#333">
+            <button onclick="closeStats()" style="background:#555">⬅ Volver al Mapa</button>
+            <h3 id="stat-title" style="color:var(--accent)"></h3>
             <div class="chart-box"><canvas id="cDiario"></canvas></div>
             <div class="chart-box"><canvas id="cMensual"></canvas></div>
             <div class="chart-box"><canvas id="cAnual"></canvas></div>
             <div class="chart-box"><canvas id="cHist"></canvas></div>
         </div>
     </div>
+
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script>
+        // Inicialización del Mapa
         var map = L.map('map').setView([37.8, -4.7], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
         var drawnItems = new L.FeatureGroup().addTo(map);
-        var drawControl = new L.Control.Draw({ draw: { polygon: true, circle: false, marker: false, polyline: false, circlemarker: false }, edit: { featureGroup: drawnItems } }).addTo(map);
+        var drawControl = new L.Control.Draw({
+            draw: { polygon: true, circle: false, marker: false, polyline: false, circlemarker: false },
+            edit: { featureGroup: drawnItems }
+        }).addTo(map);
 
-        let lastCenter = null;
+        let tempCentroide = null;
+
+        // AUTORELLENO AL DIBUJAR
         map.on('draw:created', function (e) {
             drawnItems.clearLayers();
             drawnItems.addLayer(e.layer);
-            lastCenter = e.layer.getBounds().getCenter();
+            tempCentroide = e.layer.getBounds().getCenter();
             
-            // Autocompletado Geocoding al dibujar
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lastCenter.lat}&lon=${lastCenter.lng}`)
+            // Geocoding inverso para Provincia y Municipio
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${tempCentroide.lat}&lon=${tempCentroide.lng}`)
                 .then(r => r.json()).then(data => {
-                    document.getElementById('p_prov').value = data.address.state || '';
-                    document.getElementById('p_mun').value = data.address.city || data.address.town || '';
+                    document.getElementById('p_prov').value = data.address.state || 'Desconocido';
+                    document.getElementById('p_mun').value = data.address.city || data.address.town || 'Desconocido';
                 });
         });
 
-        function verGraficos(id) {
-            fetch(`/api/parcelas/${id}`, { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} })
-                .then(r => r.json()).then(data => {
-                    document.getElementById('app-ui').style.display = 'none';
-                    document.getElementById('detalles-ui').style.display = 'block';
-                    document.getElementById('det_titulo').innerText = data.parcela.nombre;
-                    
-                    const m = data.parcela.meteo;
-                    renderChart('cDiario', 'Lluvia Diaria (mm)', m.diario);
-                    renderChart('cMensual', 'Lluvia Mensual (mm)', m.mensual);
-                    renderChart('cAnual', 'Acumulado Anual', m.anual);
-                    renderChart('cHist', 'Histórico SIGPAC', m.historico);
-                });
+        // Lógica de Autenticación
+        function toggleAuth() {
+            const l = document.getElementById('login-ui'), r = document.getElementById('reg-ui');
+            l.style.display = l.style.display === 'none' ? 'block' : 'none';
+            r.style.display = r.style.display === 'none' ? 'block' : 'none';
         }
 
-        function renderChart(id, label, datos) {
-            new Chart(document.getElementById(id), {
-                type: 'line',
-                data: { labels: datos.map(d => d.f), datasets: [{ label: label, data: datos.map(d => d.v), borderColor: '#2ecc71', tension: 0.3 }] }
+        async function handleAuth(url) {
+            const isReg = url.includes('registro');
+            const body = isReg ? {
+                username: r_user.value, email: r_email.value, 
+                password: r_pass.value, confirm_password: r_conf.value
+            } : { emailOrUsername: l_user.value, password: l_pass.value };
+
+            const res = await fetch(url, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if(data.token) {
+                localStorage.setItem('token', data.token);
+                location.reload();
+            } else { alert(data.error); }
+        }
+
+        // Carga Inicial
+        window.onload = () => {
+            if(localStorage.getItem('token')) {
+                document.getElementById('hero-overlay').style.display = 'none';
+                document.getElementById('main-sidebar').style.display = 'block';
+                loadParcelas();
+            }
+        };
+
+        async function saveParcela() {
+            const body = {
+                nombre: p_nombre.value, cultivo: p_cultivo.value,
+                provincia: p_prov.value, municipio: p_mun.value,
+                centroide: tempCentroide, superficie: 1.5 // Ejemplo
+            };
+            await fetch('/api/parcelas', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token')},
+                body: JSON.stringify(body)
+            });
+            location.reload();
+        }
+
+        async function loadParcelas() {
+            const res = await fetch('/api/parcelas', {
+                headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
+            });
+            const data = await res.json();
+            const list = document.getElementById('parcelas-lista');
+            data.parcelas.forEach(p => {
+                list.innerHTML += `
+                    <div class="card" onclick="viewStats(${p.id})">
+                        <strong>${p.nombre}</strong><br>
+                        <small>${p.cultivo} - ${p.mun}</small>
+                    </div>`;
             });
         }
 
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/service-worker.js');
+        async function viewStats(id) {
+            const res = await fetch(`/api/parcelas/${id}`, {
+                headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
+            });
+            const data = await res.json();
+            document.getElementById('stats-section').style.display = 'block';
+            document.getElementById('stat-title').innerText = data.parcela.nombre;
+            
+            const m = data.parcela.meteo;
+            renderChart('cDiario', 'Lluvia Diaria', m.diario, '#C8943A');
+            renderChart('cMensual', 'Mensual', m.mensual, '#2ecc71');
+            renderChart('cAnual', 'Acumulado Anual', m.anual, '#3498db');
+            renderChart('cHist', 'Histórico 10 años', m.historico, '#e74c3c');
         }
+
+        function renderChart(canvasId, label, datos, color) {
+            new Chart(document.getElementById(canvasId), {
+                type: 'line',
+                data: {
+                    labels: datos.map(d => d.f),
+                    datasets: [{ label: label, data: datos.map(d => d.v), borderColor: color, fill: false }]
+                }
+            });
+        }
+
+        function logout() { localStorage.clear(); location.reload(); }
+        function closeStats() { document.getElementById('stats-section').style.display = 'none'; }
     </script>
 </body>
 </html>
