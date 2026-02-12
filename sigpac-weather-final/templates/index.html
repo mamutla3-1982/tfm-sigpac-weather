@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIGPAC Weather – Meteorología Agrícola</title>
+
+<!-- PWA Meta Tags -->
+<meta name="description" content="Meteorología agrícola de precisión conectada a SIGPAC y AEMET">
+<meta name="theme-color" content="#C8943A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SIGPAC Weather">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<style>
+  :root {
+    --soil: #2D1B0E;
+    --earth: #4A2E1A;
+    --wheat: #C8943A;
+    --wheat-light: #E8B96A;
+    --sky: #1A3A5C;
+    --sky-mid: #2A5A8C;
+    --sky-light: #4A8FBF;
+    --leaf: #2E6B3E;
+    --leaf-light: #4A9E5C;
+    --cloud: #E8E4DA;
+    --mist: #F5F2EC;
+    --rain: #6BA3C8;
+    --accent: #E86832;
+    --text-dark: #1A1208;
+    --text-mid: #4A3820;
+    --text-light: #8A7A60;
+    --warn: #D4A017;
+    --danger: #C0392B;
+    --good: #27AE60;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--soil);
+    color: var(--cloud);
+    overflow-x: hidden;
+  }
+
+  /* ── AUTH MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,8,4,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  .modal-overlay.active { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .auth-modal {
+    background: var(--mist);
+    border-radius: 16px;
+    max-width: 440px;
+    width: 90%;
+    padding: 2.5rem;
+    position: relative;
+    animation: slideUp 0.3s ease;
+    box-shadow: 0 20px 80px rgba(0,0,0,0.5);
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-light);
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s;
+  }
+  .modal-close:hover { background: rgba(0,0,0,0.05); }
+
+  .auth-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.8rem;
+    color: var(--soil);
+    margin-bottom: 0.5rem;
+  }
+
+  .auth-subtitle {
+    color: var(--text-light);
+    font-size: 0.88rem;
+    margin-bottom: 2rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.2rem;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    margin-bottom: 0.4rem;
+    letter-spacing: 0.02em;
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    color: var(--soil);
+    transition: border-color 0.2s;
+    background: white;
+  }
+
+  .form-input:focus {
+    outline: none;
+    border-color: var(--wheat);
+  }
+
+  .form-error {
+    color: var(--danger);
+    font-size: 0.78rem;
+    margin-top: 0.4rem;
+    display: none;
+  }
+
+  .form-error.active { display: block; }
+
+  .btn-submit {
+    width: 100%;
+    background: linear-gradient(135deg, var(--wheat), var(--accent));
+    color: white;
+    padding: 0.85rem;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-top: 1rem;
+  }
+
+  .btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(200,148,58,0.3);
+  }
+
+  .btn-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .auth-switch {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+  }
+
+  .auth-switch a {
+    color: var(--wheat);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .auth-switch a:hover { text-decoration: underline; }
+
+  /* ── NAVIGATION ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2.5rem;
+    background: rgba(18, 10, 4, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(200,148,58,0.15);
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-decoration: none;
+  }
+
+  .nav-logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--wheat), var(--accent));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+  }
+
+  .nav-logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+    color: var(--cloud);
+  }
+
+  .nav-logo-text span { color: var(--wheat); }
+
+  .nav-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .nav-user {
+    display: none;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .nav-user.active { display: flex; }
+
+  .nav-username {
+    font-size: 0.85rem;
+    color: var(--cloud);
+    font-weight: 500;
+  }
+
+  .btn-logout {
+    background: transparent;
+    border: 1px solid rgba(232,228,218,0.25);
+    color: rgba(232,228,218,0.7);
+    padding: 0.45rem 1rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .btn-logout:hover {
+    background: rgba(232,228,218,0.07);
+    border-color: rgba(232,228,218,0.4);
+  }
+
+  .btn-auth {
+    background: linear-gradient(135deg, var(--wheat), var(--accent));
+    color: white;
+    padding: 0.45rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: 'Syne', sans-serif;
+  }
+
+  /* ── HERO ── */
+  #hero {
+    min-height: 100vh;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 7rem 2rem 4rem;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 110%, rgba(46,107,62,0.35) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(74,143,191,0.2) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 50% at 20% 30%, rgba(200,148,58,0.12) 0%, transparent 50%),
+      linear-gradient(180deg, #0A0804 0%, #1A1208 40%, #12200A 100%);
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(200,148,58,0.12);
+    border: 1px solid rgba(200,148,58,0.3);
+    padding: 0.4rem 1rem;
+    border-radius: 100px;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--wheat-light);
+    margin-bottom: 1.8rem;
+    position: relative;
+    animation: fadeDown 0.8s ease both;
+  }
+
+  .badge-dot {
+    width: 6px; height: 6px;
+    background: var(--leaf-light);
+    border-radius: 50%;
+    animation: pulse 2s ease infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.5; transform:scale(0.7); }
+  }
+
+  @keyframes fadeDown {
+    from { opacity:0; transform:translateY(-20px); }
+    to { opacity:1; transform:translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(30px); }
+    to { opacity:1; transform:translateY(0); }
+  }
+
+  .hero-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(3rem, 8vw, 6.5rem);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    text-align: center;
+    position: relative;
+    animation: fadeUp 0.9s 0.2s ease both;
+    margin-bottom: 0.2em;
+  }
+
+  .hero-title .line1 { color: var(--cloud); }
+  .hero-title .line2 {
+    background: linear-gradient(90deg, var(--wheat), var(--wheat-light), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-subtitle {
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    color: rgba(232,228,218,0.6);
+    font-weight: 300;
+    font-style: italic;
+    text-align: center;
+    max-width: 560px;
+    line-height: 1.6;
+    animation: fadeUp 0.9s 0.4s ease both;
+    margin-bottom: 3rem;
+    position: relative;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    animation: fadeUp 0.9s 0.6s ease both;
+    position: relative;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--wheat), var(--accent));
+    color: white;
+    padding: 0.85rem 2.2rem;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 8px 30px rgba(200,148,58,0.3);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(200,148,58,0.45);
+  }
+
+  /* ── MAP SECTION ── */
+  #app-container {
+    min-height: 100vh;
+    background: #0D1A0D;
+    padding-top: 70px;
+  }
+
+  .app-header {
+    padding: 2rem 2.5rem;
+    background: rgba(10,16,10,0.5);
+    border-bottom: 1px solid rgba(200,148,58,0.1);
+  }
+
+  .app-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.8rem;
+    color: var(--wheat-light);
+    margin-bottom: 0.5rem;
+  }
+
+  .app-subtitle {
+    color: rgba(232,228,218,0.5);
+    font-size: 0.9rem;
+  }
+
+  .map-controls {
+    padding: 1.5rem 2.5rem;
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    align-items: center;
+    background: rgba(10,16,10,0.3);
+    border-bottom: 1px solid rgba(200,148,58,0.08);
+  }
+
+  .control-btn {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(232,228,218,0.8);
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .control-btn:hover, .control-btn.active {
+    background: rgba(200,148,58,0.2);
+    border-color: rgba(200,148,58,0.5);
+    color: var(--wheat-light);
+  }
+
+  .control-btn.primary {
+    background: linear-gradient(135deg, var(--wheat), var(--accent));
+    border: none;
+    color: white;
+  }
+
+  .map-container {
+    position: relative;
+    height: calc(100vh - 250px);
+    min-height: 500px;
+  }
+
+  #map {
+    width: 100%;
+    height: 100%;
+  }
+
+  .parcels-sidebar {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    width: 300px;
+    max-height: calc(100% - 3rem);
+    background: rgba(10,16,10,0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(200,148,58,0.2);
+    border-radius: 12px;
+    padding: 1.2rem;
+    z-index: 500;
+    color: var(--cloud);
+    overflow-y: auto;
+  }
+
+  .sidebar-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    color: var(--wheat-light);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+  }
+
+  .parcel-item {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 0.9rem;
+    margin-bottom: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .parcel-item:hover {
+    background: rgba(200,148,58,0.1);
+    border-color: rgba(200,148,58,0.3);
+  }
+
+  .parcel-name {
+    font-weight: 600;
+    color: var(--wheat-light);
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+  }
+
+  .parcel-meta {
+    font-size: 0.75rem;
+    color: rgba(232,228,218,0.5);
+  }
+
+  .parcel-actions {
+    margin-top: 0.6rem;
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .parcel-btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(232,228,218,0.7);
+    padding: 0.35rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .parcel-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.25);
+  }
+
+  .parcel-btn.delete {
+    color: var(--danger);
+    border-color: rgba(192,57,43,0.3);
+  }
+
+  .parcel-btn.delete:hover {
+    background: rgba(192,57,43,0.1);
+  }
+
+  .empty-parcels {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: rgba(232,228,218,0.4);
+    font-size: 0.85rem;
+  }
+
+  /* Leaflet custom */
+  .leaflet-container { background: #1A2A1A !important; }
+  .leaflet-draw-toolbar a {
+    background-color: rgba(10,16,10,0.9) !important;
+    border-color: rgba(200,148,58,0.3) !important;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .parcels-sidebar { 
+      width: calc(100% - 2rem);
+      max-height: 40%;
+      top: auto;
+      bottom: 1rem;
+    }
+  }
+
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── AUTH MODALS ── -->
+<div id="loginModal" class="modal-overlay">
+  <div class="auth-modal">
+    <button class="modal-close" onclick="closeModal('loginModal')">×</button>
+    <h2 class="auth-title">Iniciar sesión</h2>
+    <p class="auth-subtitle">Accede a tus parcelas y alertas</p>
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label">Email o nombre de usuario</label>
+        <input type="text" class="form-input" name="emailOrUsername" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" class="form-input" name="password" required minlength="6">
+      </div>
+      <div id="loginError" class="form-error"></div>
+      <button type="submit" class="btn-submit">Iniciar sesión</button>
+    </form>
+    <div class="auth-switch">
+      ¿No tienes cuenta? <a onclick="switchModal('loginModal', 'registerModal')">Regístrate aquí</a>
+    </div>
+  </div>
+</div>
+
+<div id="registerModal" class="modal-overlay">
+  <div class="auth-modal">
+    <button class="modal-close" onclick="closeModal('registerModal')">×</button>
+    <h2 class="auth-title">Crear cuenta</h2>
+    <p class="auth-subtitle">Únete a SIGPAC Weather</p>
+    <form id="registerForm" onsubmit="handleRegister(event)">
+      <div class="form-group">
+        <label class="form-label">Nombre completo</label>
+        <input type="text" class="form-input" name="nombre" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre de usuario</label>
+        <input type="text" class="form-input" name="username" required minlength="3" pattern="[a-zA-Z0-9_]+" title="Solo letras, números y guión bajo">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" name="email" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" class="form-input" name="password" required minlength="6">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar contraseña</label>
+        <input type="password" class="form-input" name="passwordConfirm" required minlength="6">
+      </div>
+      <div id="registerError" class="form-error"></div>
+      <button type="submit" class="btn-submit">Crear cuenta</button>
+    </form>
+    <div class="auth-switch">
+      ¿Ya tienes cuenta? <a onclick="switchModal('registerModal', 'loginModal')">Inicia sesión</a>
+    </div>
+  </div>
+</div>
+
+<!-- ── NAVIGATION ── -->
+<nav>
+  <a class="nav-logo" href="#hero">
+    <div class="nav-logo-icon">🌾</div>
+    <span class="nav-logo-text">SIGPAC <span>Weather</span></span>
+  </a>
+  <div class="nav-actions">
+    <div id="navGuest">
+      <button class="btn-auth" onclick="openModal('loginModal')">Iniciar sesión</button>
+    </div>
+    <div id="navUser" class="nav-user">
+      <span class="nav-username" id="navUsername"></span>
+      <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section id="hero">
+  <div class="hero-bg"></div>
+
+  <div class="hero-badge">
+    <div class="badge-dot"></div>
+    Conectado a SIGPAC · AEMET · Meteored
+  </div>
+
+  <h1 class="hero-title">
+    <span class="line1">El tiempo que</span><br>
+    <span class="line2">tu cosecha necesita</span>
+  </h1>
+
+  <p class="hero-subtitle">
+    Meteorología agrícola de precisión. Conecta tus parcelas SIGPAC con datos en tiempo real de AEMET y Meteored para tomar las mejores decisiones en el campo.
+  </p>
+
+  <div class="hero-actions">
+    <button class="btn-primary" onclick="goToApp()">
+      🗺 Ver Mis Parcelas
+    </button>
+  </div>
+</section>
+
+<!-- ── APP CONTAINER ── -->
+<div id="app-container" style="display:none;">
+  <div class="app-header">
+    <h2 class="app-title">Mis Parcelas</h2>
+    <p class="app-subtitle">Dibuja, guarda y monitoriza tus parcelas agrícolas</p>
+  </div>
+
+  <div class="map-controls">
+    <button class="control-btn primary" id="btnDraw" onclick="toggleDrawMode()">
+      ✏️ Dibujar nueva parcela
+    </button>
+    <button class="control-btn" id="btnSave" onclick="saveCurrentParcel()" style="display:none;">
+      💾 Guardar parcela
+    </button>
+    <button class="control-btn" id="btnCancel" onclick="cancelDraw()" style="display:none;">
+      ❌ Cancelar
+    </button>
+  </div>
+
+  <div class="map-container">
+    <div id="map"></div>
+
+    <div class="parcels-sidebar">
+      <div class="sidebar-title">📍 Tus parcelas</div>
+      <div id="parcelsList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── GLOBAL STATE ──
+let currentUser = null;
+let token = localStorage.getItem('token') || null;
+let map = null;
+let drawnItems = null;
+let drawControl = null;
+let currentDrawnLayer = null;
+let userParcels = [];
+
+// API Base URL (cambia a tu URL de Render en producción)
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000/api'
+  : '/api';
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', () => {
+  if (token) {
+    verifyToken();
+  }
+});
+
+// ── AUTH FUNCTIONS ──
+async function verifyToken() {
+  try {
+    const res = await fetch(`${API_URL}/auth/perfil`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = data.usuario;
+      updateNav();
+    } else {
+      logout();
+    }
+  } catch (err) {
+    console.error('Error verificando token:', err);
+    logout();
+  }
+}
+
+function updateNav() {
+  if (currentUser) {
+    document.getElementById('navGuest').style.display = 'none';
+    document.getElementById('navUser').classList.add('active');
+    document.getElementById('navUsername').textContent = `@${currentUser.username}`;
+  } else {
+    document.getElementById('navGuest').style.display = 'block';
+    document.getElementById('navUser').classList.remove('active');
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const form = e.target;
+  const btn = form.querySelector('.btn-submit');
+  const errorEl = document.getElementById('loginError');
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  errorEl.classList.remove('active');
+
+  try {
+    const res = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailOrUsername: form.emailOrUsername.value,
+        password: form.password.value
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      token = data.token;
+      currentUser = data.usuario;
+      localStorage.setItem('token', token);
+      updateNav();
+      closeModal('loginModal');
+      form.reset();
+      goToApp();
+    } else {
+      errorEl.textContent = data.error || 'Error al iniciar sesión';
+      errorEl.classList.add('active');
+    }
+  } catch (err) {
+    errorEl.textContent = 'Error de conexión';
+    errorEl.classList.add('active');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Iniciar sesión';
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  const form = e.target;
+  const btn = form.querySelector('.btn-submit');
+  const errorEl = document.getElementById('registerError');
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  errorEl.classList.remove('active');
+
+  // Validar contraseñas coinciden
+  if (form.password.value !== form.passwordConfirm.value) {
+    errorEl.textContent = 'Las contraseñas no coinciden';
+    errorEl.classList.add('active');
+    btn.disabled = false;
+    btn.textContent = 'Crear cuenta';
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/auth/registro`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: form.nombre.value,
+        username: form.username.value,
+        email: form.email.value,
+        password: form.password.value,
+        passwordConfirm: form.passwordConfirm.value
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      token = data.token;
+      currentUser = data.usuario;
+      localStorage.setItem('token', token);
+      updateNav();
+      closeModal('registerModal');
+      form.reset();
+      goToApp();
+    } else {
+      errorEl.textContent = data.error || 'Error al crear cuenta';
+      errorEl.classList.add('active');
+    }
+  } catch (err) {
+    errorEl.textContent = 'Error de conexión';
+    errorEl.classList.add('active');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Crear cuenta';
+  }
+}
+
+function logout() {
+  token = null;
+  currentUser = null;
+  localStorage.removeItem('token');
+  updateNav();
+  document.getElementById('hero').style.display = 'flex';
+  document.getElementById('app-container').style.display = 'none';
+}
+
+// ── MODAL FUNCTIONS ──
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+  const form = document.getElementById(id).querySelector('form');
+  if (form) form.reset();
+  const error = document.getElementById(id).querySelector('.form-error');
+  if (error) error.classList.remove('active');
+}
+
+function switchModal(from, to) {
+  closeModal(from);
+  openModal(to);
+}
+
+// ── APP NAVIGATION ──
+function goToApp() {
+  if (!currentUser) {
+    openModal('loginModal');
+    return;
+  }
+  document.getElementById('hero').style.display = 'none';
+  document.getElementById('app-container').style.display = 'block';
+  initMap();
+  loadParcels();
+}
+
+// ── MAP INIT ──
+function initMap() {
+  if (map) return;
+
+  map = L.map('map').setView([40.416, -3.703], 6);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Capa para las parcelas dibujadas
+  drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+
+  // Control de dibujo (inicialmente oculto)
+  drawControl = new L.Control.Draw({
+    edit: {
+      featureGroup: drawnItems,
+      edit: false,
+      remove: false
+    },
+    draw: {
+      polyline: false,
+      circle: false,
+      circlemarker: false,
+      marker: false,
+      rectangle: false,
+      polygon: {
+        allowIntersection: false,
+        shapeOptions: {
+          color: '#C8943A',
+          fillColor: '#C8943A',
+          fillOpacity: 0.3,
+          weight: 2
+        }
+      }
+    }
+  });
+
+  // Evento cuando se completa un dibujo
+  map.on(L.Draw.Event.CREATED, (e) => {
+    currentDrawnLayer = e.layer;
+    drawnItems.addLayer(currentDrawnLayer);
+    
+    document.getElementById('btnDraw').style.display = 'none';
+    document.getElementById('btnSave').style.display = 'inline-block';
+    document.getElementById('btnCancel').style.display = 'inline-block';
+    
+    map.removeControl(drawControl);
+  });
+}
+
+// ── DRAW MODE ──
+function toggleDrawMode() {
+  if (!drawControl._map) {
+    map.addControl(drawControl);
+    document.getElementById('btnDraw').textContent = '🔄 Modo dibujo activo';
+    document.getElementById('btnDraw').classList.add('active');
+  }
+}
+
+function cancelDraw() {
+  if (currentDrawnLayer) {
+    drawnItems.removeLayer(currentDrawnLayer);
+    currentDrawnLayer = null;
+  }
+  map.removeControl(drawControl);
+  document.getElementById('btnDraw').style.display = 'inline-block';
+  document.getElementById('btnDraw').textContent = '✏️ Dibujar nueva parcela';
+  document.getElementById('btnDraw').classList.remove('active');
+  document.getElementById('btnSave').style.display = 'none';
+  document.getElementById('btnCancel').style.display = 'none';
+}
+
+async function saveCurrentParcel() {
+  if (!currentDrawnLayer) return;
+
+  const nombre = prompt('Nombre de la parcela:', 'Mi parcela');
+  if (!nombre) return;
+
+  const cultivo = prompt('Tipo de cultivo:', 'Cereal');
+  const coords = currentDrawnLayer.toGeoJSON().geometry.coordinates;
+  
+  // Calcular superficie aproximada (en hectáreas)
+  const area = L.GeometryUtil ? L.GeometryUtil.geodesicArea(currentDrawnLayer.getLatLngs()[0]) / 10000 : 0;
+
+  try {
+    const res = await fetch(`${API_URL}/parcelas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        nombre,
+        cultivo,
+        superficie: area.toFixed(2),
+        coordenadas: {
+          type: 'Polygon',
+          coordinates: coords
+        },
+        centroide: {
+          lat: currentDrawnLayer.getBounds().getCenter().lat,
+          lng: currentDrawnLayer.getBounds().getCenter().lng
+        }
+      })
+    });
+
+    if (res.ok) {
+      alert('✅ Parcela guardada correctamente');
+      cancelDraw();
+      loadParcels();
+    } else {
+      const data = await res.json();
+      alert('Error: ' + data.error);
+    }
+  } catch (err) {
+    alert('Error de conexión');
+  }
+}
+
+// ── LOAD PARCELS ──
+async function loadParcels() {
+  try {
+    const res = await fetch(`${API_URL}/parcelas`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      userParcels = data.parcelas;
+      renderParcels();
+    }
+  } catch (err) {
+    console.error('Error cargando parcelas:', err);
+  }
+}
+
+function renderParcels() {
+  const container = document.getElementById('parcelsList');
+  
+  if (userParcels.length === 0) {
+    container.innerHTML = '<div class="empty-parcels">No tienes parcelas guardadas.<br>Dibuja tu primera parcela en el mapa.</div>';
+    return;
+  }
+
+  // Limpiar capas previas
+  drawnItems.clearLayers();
+
+  container.innerHTML = userParcels.map(p => `
+    <div class="parcel-item" onclick="zoomToParcel('${p._id}')">
+      <div class="parcel-name">${p.nombre}</div>
+      <div class="parcel-meta">
+        🌱 ${p.cultivo || 'Sin cultivo'} • 📐 ${p.superficie || 0} ha
+      </div>
+      <div class="parcel-actions">
+        <button class="parcel-btn" onclick="event.stopPropagation(); zoomToParcel('${p._id}')">Ver</button>
+        <button class="parcel-btn delete" onclick="event.stopPropagation(); deleteParcel('${p._id}')">Eliminar</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Dibujar parcelas en el mapa
+  userParcels.forEach(p => {
+    if (p.coordenadas && p.coordenadas.coordinates) {
+      const coords = p.coordenadas.coordinates[0].map(c => [c[1], c[0]]);
+      const poly = L.polygon(coords, {
+        color: '#C8943A',
+        fillColor: '#C8943A',
+        fillOpacity: 0.25,
+        weight: 2
+      });
+      
+      poly.bindPopup(`
+        <div style="font-family:'DM Sans',sans-serif;color:#1A1208">
+          <b style="color:#C8943A;font-size:1rem">${p.nombre}</b><br>
+          <div style="margin-top:0.5rem;font-size:0.85rem">
+            🌱 ${p.cultivo || 'Sin cultivo'}<br>
+            📐 ${p.superficie || 0} ha
+          </div>
+        </div>
+      `);
+      
+      poly._parcelId = p._id;
+      drawnItems.addLayer(poly);
+    }
+  });
+}
+
+function zoomToParcel(id) {
+  const parcel = userParcels.find(p => p._id === id);
+  if (parcel && parcel.centroide) {
+    map.setView([parcel.centroide.lat, parcel.centroide.lng], 15);
+    
+    // Abrir popup de la parcela
+    drawnItems.eachLayer(layer => {
+      if (layer._parcelId === id) {
+        layer.openPopup();
+      }
+    });
+  }
+}
+
+async function deleteParcel(id) {
+  if (!confirm('¿Eliminar esta parcela?')) return;
+
+  try {
+    const res = await fetch(`${API_URL}/parcelas/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.ok) {
+      loadParcels();
+    } else {
+      alert('Error al eliminar');
+    }
+  } catch (err) {
+    alert('Error de conexión');
+  }
+}
+
+// ── PWA SERVICE WORKER ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/static/service-worker.js')
+      .then(reg => console.log('✅ Service Worker registrado'))
+      .catch(err => console.log('❌ Error SW:', err));
+  });
+}
+
+// ── KEEP-ALIVE PING (evita que Render duerma la app) ──
+setInterval(() => {
+  fetch(`${API_URL}/health`)
+    .then(() => console.log('🏓 Keep-alive ping'))
+    .catch(err => console.log('Ping error:', err));
+}, 14 * 60 * 1000); // Cada 14 minutos
+
+// Ping inicial
+setTimeout(() => {
+  fetch(`${API_URL}/health`).catch(() => {});
+}, 5000);
+</script>
+</body>
+</html>
