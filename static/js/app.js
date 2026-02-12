@@ -117,6 +117,18 @@ function inicializarMapa() {
         currentGeoJSON = layer.toGeoJSON();
         calcularArea(layer);
     });
+
+    // click SIGPAC real
+    map.on("click", async function(e) {
+        const lat = e.latlng.lat;
+        const lon = e.latlng.lng;
+
+        const info = await obtenerInfoSIGPACDesdeClick(lat, lon);
+        if (!info) return;
+
+        actualizarPanelSIGPAC(info);
+        cargarGraficosLluvia(info);
+    });
 }
 
 function calcularArea(layer) {
@@ -124,7 +136,7 @@ function calcularArea(layer) {
     document.getElementById("area").innerText = (area_m2 / 10000).toFixed(2);
 }
 
-/* SIGPAC INFO */
+/* SIGPAC INFO (centro de polígono ya existente) */
 async function obtenerInfoSIGPAC(geojson) {
     const centro = turf.center(geojson).geometry.coordinates;
     const lon = centro[0], lat = centro[1];
@@ -145,7 +157,32 @@ async function obtenerInfoSIGPAC(geojson) {
     };
 }
 
-/* GUARDAR PARCELA */
+/* SIGPAC desde click */
+async function obtenerInfoSIGPACDesdeClick(lat, lon) {
+    const bbox = `${lon-0.0005},${lat-0.0005},${lon+0.0005},${lat+0.0005}`;
+
+    const url = `https://sigpac.mapa.es/fega/servicios/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=PARCELA&QUERY_LAYERS=PARCELA&INFO_FORMAT=application/json&FEATURE_COUNT=1&CRS=EPSG:4326&BBOX=${bbox}&WIDTH=101&HEIGHT=101&I=50&J=50`;
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (!data.features || data.features.length === 0) return null;
+
+    return data.features[0].properties;
+}
+
+function actualizarPanelSIGPAC(info) {
+    document.getElementById("parcela-nombre").innerText = `Parcela ${info.PARCELA}`;
+    document.getElementById("parcela-info").innerHTML = `
+        <strong>Provincia:</strong> ${info.PROVINCIA}<br>
+        <strong>Municipio:</strong> ${info.MUNICIPIO}<br>
+        <strong>Polígono:</strong> ${info.POLIGONO}<br>
+        <strong>Parcela:</strong> ${info.PARCELA}<br>
+        <strong>Recinto:</strong> ${info.RECINTO}<br>
+    `;
+}
+
+/* GUARDAR PARCELA DIBUJADA */
 async function guardarParcela() {
     if (!currentGeoJSON) {
         alert("Dibuja una parcela primero");
@@ -210,7 +247,7 @@ async function cargarParcelas() {
     });
 }
 
-/* VER DETALLES */
+/* VER DETALLES PARCELA GUARDADA */
 async function verParcela(id) {
     parcelaSeleccionadaId = id;
     mostrarVista('app');
@@ -239,7 +276,7 @@ async function verParcela(id) {
     dibujarGrafico(lluviaDiaria);
 }
 
-/* GRÁFICO LLUVIA */
+/* GRÁFICO LLUVIA (antiguo, lo mantenemos) */
 function dibujarGrafico(lluviaDiaria) {
     const ctx = document.getElementById("grafico-lluvia").getContext("2d");
 
@@ -266,45 +303,83 @@ function dibujarGrafico(lluviaDiaria) {
     });
 }
 
-/* EDITAR PARCELA */
-async function editarParcela(id) {
-    const nuevoNombre = prompt("Nuevo nombre de la parcela:");
-    if (!nuevoNombre) return;
+/* NUEVOS 4 GRÁFICOS EN SIDEBAR (datos simulados por ahora) */
+function cargarGraficosLluvia(info) {
+    const lluvia = {
+        diario: [0, 2, 5, 1, 0, 3, 4],
+        mensual: [20, 35, 10, 5, 0, 50, 30, 15, 5, 0, 40, 60],
+        acumulada: [20, 55, 65, 70, 70, 120, 150],
+        comparativa: {
+            actual: [20, 55, 65, 70, 70, 120, 150],
+            anterior: [10, 40, 50, 60, 65, 90, 110]
+        }
+    };
 
-    const resp = await fetch(`/api/parcelas/${id}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
-        },
-        body: JSON.stringify({ nombre: nuevoNombre })
-    });
-
-    if (resp.ok) {
-        alert("Parcela actualizada");
-        cargarParcelas();
-    } else {
-        alert("Error al actualizar");
-    }
+    dibujarGraficoBar("grafico-diario", lluvia.diario);
+    dibujarGraficoBar("grafico-mensual", lluvia.mensual);
+    dibujarGraficoLinea("grafico-acumulada", lluvia.acumulada);
+    dibujarGraficoComparativa("grafico-comparativa", lluvia.comparativa);
 }
 
-/* ELIMINAR PARCELA */
-async function eliminarParcela(id) {
-    if (!confirm("¿Seguro que quieres eliminar esta parcela?")) return;
-
-    const resp = await fetch(`/api/parcelas/${id}`, {
-        method: "DELETE",
-        headers: {
-            "Authorization": "Bearer " + localStorage.getItem("token")
+function dibujarGraficoBar(id, datos) {
+    const ctx = document.getElementById(id).getContext("2d");
+    new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: datos.map((_, i) => i+1),
+            datasets: [{
+                label: "mm",
+                data: datos,
+                backgroundColor: "#1e3d59aa"
+            }]
+        },
+        options: {
+            responsive:true,
+            scales:{ y:{ beginAtZero:true } }
         }
     });
+}
 
-    if (resp.ok) {
-        alert("Parcela eliminada");
-        cargarParcelas();
-    } else {
-        alert("Error al eliminar");
-    }
+function dibujarGraficoLinea(id, datos) {
+    const ctx = document.getElementById(id).getContext("2d");
+    new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: datos.map((_, i) => i+1),
+            datasets: [{
+                label: "mm acumulados",
+                data: datos,
+                borderColor: "#1e3d59",
+                fill: false
+            }]
+        },
+        options:{ responsive:true }
+    });
+}
+
+function dibujarGraficoComparativa(id, datos) {
+    const ctx = document.getElementById(id).getContext("2d");
+    new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: datos.actual.map((_, i) => i+1),
+            datasets: [
+                {
+                    label: "Año actual",
+                    data: datos.actual,
+                    borderColor: "#1e3d59",
+                    fill: false
+                },
+                {
+                    label: "Año anterior",
+                    data: datos.anterior,
+                    borderColor: "#ff9900",
+                    fill: false
+                }
+            ]
+        },
+        options:{ responsive:true }
+    });
 }
 
 /* PERFIL */
