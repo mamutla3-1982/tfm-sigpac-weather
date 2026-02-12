@@ -1,1 +1,41 @@
+/* ----- Estilos básicos generales ----- */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+}
 
+/* ----- Contenedor principal ----- */
+.container {
+    width: 90%;
+    margin: 0 auto;
+}
+
+/* ----- Mapa SIGPAC ----- */
+#map {
+    height: 600px;   /* Ajusta si quieres un mapa más grande */
+    width: 100%;
+    border: 2px solid #333;
+    border-radius: 6px;
+    margin-top: 20px;
+}
+
+/* ----- Encabezados ----- */
+h1, h2, h3 {
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+/* ----- Botones ----- */
+button {
+    background-color: #2c6e91;
+    color: white;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #245a75;
+}
