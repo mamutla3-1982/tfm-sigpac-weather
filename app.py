@@ -5,14 +5,14 @@ import os, json, jwt, requests
 from datetime import datetime, timedelta
 from functools import wraps
 
-# --- 1. DEFINICIÓN DE APP (Mantenido arriba para evitar errores) ---
+# --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 app = Flask(__name__)
 
-# --- 2. CONFIGURACIÓN (Mantengo tus datos originales) ---
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'agro_2026_key')
 app.config['JWT_SECRET'] = os.environ.get('JWT_SECRET', 'jwt_agro_2026')
 app.config['AEMET_API_KEY'] = os.environ.get('AEMET_API_KEY', '')
 
+# Conexión DB (SQLite local / PostgreSQL en Render)
 uri = os.environ.get('DATABASE_URL', 'sqlite:///sigpac.db')
 if uri.startswith("postgres://"): uri = uri.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
@@ -20,7 +20,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# --- 3. MODELOS (Sin borrar nada) ---
+# --- 2. MODELOS DE DATOS (ORIGINALES) ---
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -41,7 +41,7 @@ class Parcela(db.Model):
 with app.app_context():
     db.create_all()
 
-# --- 4. AUTH MIDDLEWARE (Mantenido) ---
+# --- 3. MIDDLEWARE DE AUTENTICACIÓN ---
 def login_requerido(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -53,18 +53,60 @@ def login_requerido(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- 5. RUTAS EXISTENTES Y AUMENTOS ---
+# --- 4. RUTAS DE LA API ---
 
 @app.route('/')
-def index(): return render_template('index.html')
+def index(): 
+    return render_template('index.html')
 
-# AUMENTO: Ruta solicitada que arroja datos SIGPAC y los 4 gráficos de lluvia
+@app.route('/api/auth/registro', methods=['POST'])
+def registro():
+    data = request.json
+    # AUMENTO: Confirmación de contraseña
+    if data['password'] != data.get('confirm_password'):
+        return jsonify({'error': 'Las contraseñas no coinciden'}), 400
+    if Usuario.query.filter_by(email=data['email']).first(): 
+        return jsonify({'error': 'Email ya existe'}), 400
+    
+    u = Usuario(username=data['username'], email=data['email'], 
+                password=generate_password_hash(data['password']))
+    db.session.add(u); db.session.commit()
+    token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
+    return jsonify({'token': token, 'username': u.username}), 201
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json
+    u = Usuario.query.filter((Usuario.email == data['emailOrUsername']) | (Usuario.username == data['emailOrUsername'])).first()
+    if u and check_password_hash(u.password, data['password']):
+        token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
+        return jsonify({'token': token, 'username': u.username})
+    return jsonify({'error': 'Credenciales incorrectas'}), 401
+
+@app.route('/api/parcelas', methods=['GET', 'POST'])
+@login_requerido
+def gestionar_parcelas():
+    if request.method == 'POST':
+        data = request.json
+        p = Parcela(user_id=request.current_user_id, nombre=data['nombre'], provincia=data['provincia'],
+                    municipio=data['municipio'], cultivo=data['cultivo'], superficie=data['superficie'],
+                    centroide=json.dumps(data['centroide']))
+        db.session.add(p); db.session.commit()
+        return jsonify({'id': p.id}), 201
+    
+    parcelas = Parcela.query.filter_by(user_id=request.current_user_id).all()
+    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'cultivo': x.cultivo} for x in parcelas]})
+
+# AUMENTO: Ruta para arronar datos completos (SIGPAC + 4 Gráficos + Alerta)
 @app.route('/api/parcelas/<int:id>/datos_completos', methods=['GET'])
 @login_requerido
 def datos_completos(id):
     p = Parcela.query.filter_by(id=id, user_id=request.current_user_id).first_or_404()
     
-    # AUMENTO: Cruce de información SIGPAC + Meteorología (AEMET/Mateo)
+    # Simulación de datos meteorológicos (AEMET/Mateo)
+    lluvia_hoy = 12.5 
+    alerta = "⚠️ RIESGO DE ESCORRENTÍA" if lluvia_hoy > 10 else "Normal"
+
     return jsonify({
         "parcela": p.nombre,
         "data": {
@@ -75,23 +117,5 @@ def datos_completos(id):
                 "superficie": p.superficie
             },
             "graficos": {
-                "diario": [{"f": "00h", "v": 0.5}, {"f": "08h", "v": 12.4}, {"f": "16h", "v": 3.1}],
-                "mensual": [{"f": "Sem 1", "v": 15}, {"f": "Sem 2", "v": 48}, {"f": "Sem 3", "v": 5}],
-                "anual": [{"f": "2024", "v": 515}, {"f": "2025", "v": 490}],
-                "historico": [{"f": "Media 10 años", "v": 500}, {"f": "Máximo", "v": 620}, {"f": "Mínimo", "v": 310}]
-            },
-            "alerta": "Lluvia intensa detectada" if 12.4 > 10 else "Normal"
-        }
-    })
-
-# Mantenemos tus rutas de auth intactas
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    data = request.json
-    u = Usuario.query.filter((Usuario.email == data['emailOrUsername']) | (Usuario.username == data['emailOrUsername'])).first()
-    if u and check_password_hash(u.password, data['password']):
-        token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
-        return jsonify({'token': token, 'username': u.username})
-    return jsonify({'error': 'Credenciales incorrectas'}), 401
-
-# ... [AQUÍ SIGUEN TUS DEMÁS RUTAS DE REGISTRO Y GESTIONAR_PARCELAS] ...
+                "diario": [{"f": "08h", "v": 2.1}, {"f": "14h", "v": 8.4}, {"f": "20h", "v": 2.0}],
+                "mensual": [{"f": "Sem 1", "
