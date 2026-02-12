@@ -1,9 +1,8 @@
 let map, drawnItems, currentGeoJSON = null;
 let parcelaSeleccionadaId = null;
+let graficoLluvia = null;
 
-/* ============================
-   VISTAS
-============================ */
+/* VISTAS */
 function mostrarVista(nombre) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(`view-${nombre}`).classList.add('active');
@@ -19,6 +18,7 @@ function actualizarEstadoAuth() {
     document.getElementById('btn-register').style.display = token ? "none" : "inline-block";
     document.getElementById('btn-logout').style.display = token ? "inline-block" : "none";
     document.getElementById('btn-parcelas').style.display = token ? "inline-block" : "none";
+    document.getElementById('btn-perfil').style.display = token ? "inline-block" : "none";
 
     if (token) {
         mostrarVista('app');
@@ -28,9 +28,7 @@ function actualizarEstadoAuth() {
     }
 }
 
-/* ============================
-   REGISTRO
-============================ */
+/* REGISTRO */
 async function hacerRegistro() {
     const username = document.getElementById('reg-username').value.trim();
     const email = document.getElementById('reg-email').value.trim();
@@ -58,9 +56,7 @@ async function hacerRegistro() {
     }
 }
 
-/* ============================
-   LOGIN
-============================ */
+/* LOGIN */
 async function hacerLogin() {
     const emailOrUsername = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
@@ -81,9 +77,7 @@ async function hacerLogin() {
     }
 }
 
-/* ============================
-   LOGOUT
-============================ */
+/* LOGOUT */
 function cerrarSesion() {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
@@ -92,9 +86,7 @@ function cerrarSesion() {
     actualizarEstadoAuth();
 }
 
-/* ============================
-   MAPA
-============================ */
+/* MAPA */
 function inicializarMapa() {
     if (map) return;
 
@@ -132,9 +124,7 @@ function calcularArea(layer) {
     document.getElementById("area").innerText = (area_m2 / 10000).toFixed(2);
 }
 
-/* ============================
-   SIGPAC INFO
-============================ */
+/* SIGPAC INFO */
 async function obtenerInfoSIGPAC(geojson) {
     const centro = turf.center(geojson).geometry.coordinates;
     const lon = centro[0], lat = centro[1];
@@ -155,9 +145,7 @@ async function obtenerInfoSIGPAC(geojson) {
     };
 }
 
-/* ============================
-   GUARDAR PARCELA
-============================ */
+/* GUARDAR PARCELA */
 async function guardarParcela() {
     if (!currentGeoJSON) {
         alert("Dibuja una parcela primero");
@@ -189,9 +177,7 @@ async function guardarParcela() {
     else alert("Error al guardar");
 }
 
-/* ============================
-   LISTAR PARCELAS
-============================ */
+/* LISTAR PARCELAS */
 async function cargarParcelas() {
     mostrarVista('parcelas');
 
@@ -216,15 +202,15 @@ async function cargarParcelas() {
             <p><strong>Municipio:</strong> ${p.municipio || "—"}</p>
             <p><strong>Superficie:</strong> ${p.superficie} ha</p>
             <button onclick="verParcela(${p.id})">Ver detalles</button>
+            <button onclick="editarParcela(${p.id})">Editar</button>
+            <button onclick="eliminarParcela(${p.id})" style="background:#b30000;color:white;">Eliminar</button>
         `;
 
         cont.appendChild(card);
     });
 }
 
-/* ============================
-   VER DETALLES
-============================ */
+/* VER DETALLES */
 async function verParcela(id) {
     parcelaSeleccionadaId = id;
     mostrarVista('app');
@@ -248,7 +234,83 @@ async function verParcela(id) {
         <img src="${icono}" style="width:50px;">
         <p>${lluvia} mm</p>
     `;
+
+    const lluviaDiaria = data.data.graficos.diario.map(d => d.v);
+    dibujarGrafico(lluviaDiaria);
+}
+
+/* GRÁFICO LLUVIA */
+function dibujarGrafico(lluviaDiaria) {
+    const ctx = document.getElementById("grafico-lluvia").getContext("2d");
+
+    if (graficoLluvia) graficoLluvia.destroy();
+
+    graficoLluvia = new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: lluviaDiaria.map((_, i) => `Día ${i+1}`),
+            datasets: [{
+                label: "Lluvia (mm)",
+                data: lluviaDiaria,
+                backgroundColor: "#1e3d59aa",
+                borderColor: "#1e3d59",
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+/* EDITAR PARCELA */
+async function editarParcela(id) {
+    const nuevoNombre = prompt("Nuevo nombre de la parcela:");
+    if (!nuevoNombre) return;
+
+    const resp = await fetch(`/api/parcelas/${id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("token")
+        },
+        body: JSON.stringify({ nombre: nuevoNombre })
+    });
+
+    if (resp.ok) {
+        alert("Parcela actualizada");
+        cargarParcelas();
+    } else {
+        alert("Error al actualizar");
+    }
+}
+
+/* ELIMINAR PARCELA */
+async function eliminarParcela(id) {
+    if (!confirm("¿Seguro que quieres eliminar esta parcela?")) return;
+
+    const resp = await fetch(`/api/parcelas/${id}`, {
+        method: "DELETE",
+        headers: {
+            "Authorization": "Bearer " + localStorage.getItem("token")
+        }
+    });
+
+    if (resp.ok) {
+        alert("Parcela eliminada");
+        cargarParcelas();
+    } else {
+        alert("Error al eliminar");
+    }
+}
+
+/* PERFIL */
+async function cargarPerfil() {
+    mostrarVista("perfil");
+    document.getElementById("perfil-username").innerText = localStorage.getItem("username");
 }
 
 document.addEventListener('DOMContentLoaded', actualizarEstadoAuth);
-
