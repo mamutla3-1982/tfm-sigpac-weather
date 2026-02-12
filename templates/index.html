@@ -1,64 +1,201 @@
-<div id="det-panel" class="sidebar-section" style="display:none; padding:15px; background:#1a1a1a; border:1px solid #C8943A; margin-top:20px;">
-    <h3 id="det-nombre" style="color:#C8943A;"></h3>
-    <div id="det-texto" style="color:white; margin-bottom:20px;"></div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroApp 2026</title>
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <canvas id="chartDiario" style="margin-bottom:20px;"></canvas>
-    <canvas id="chartMensual" style="margin-bottom:20px;"></canvas>
-    <canvas id="chartAnual" style="margin-bottom:20px;"></canvas>
-    <canvas id="chartHist" style="margin-bottom:20px;"></canvas>
-
-    <button onclick="document.getElementById('det-panel').style.display='none'">Cerrar</button>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-let misGraficos = {}; // Para evitar errores de "canvas in use"
-
-async function verDetalles(id) {
-    const res = await fetch(`/api/parcelas/${id}/datos_completos`, {
-        headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
-    });
-    const result = await res.json();
-    const d = result.data;
-
-    document.getElementById('det-panel').style.display = 'block';
-    document.getElementById('det-nombre').innerText = result.parcela;
-    document.getElementById('det-texto').innerHTML = `
-        <b>Provincia:</b> ${d.info_sigpac.provincia}<br>
-        <b>Municipio:</b> ${d.info_sigpac.municipio}<br>
-        <b>Cultivo:</b> ${d.info_sigpac.cultivo}
-    `;
-
-    // Pintar los 4 gráficos solicitados
-    pintarGrafico('chartDiario', 'Lluvia Diaria (mm)', d.graficos.diario, '#C8943A');
-    pintarGrafico('chartMensual', 'Acumulado Mensual', d.graficos.mensual, '#2ecc71');
-    pintarGrafico('chartAnual', 'Acumulado Anual', d.graficos.anual, '#3498db');
-    pintarGrafico('chartHist', 'Histórico 10 años', d.graficos.historico, '#e74c3c');
-}
-
-function pintarGrafico(id, label, puntos, color) {
-    const ctx = document.getElementById(id).getContext('2d');
-    if (misGraficos[id]) { misGraficos[id].destroy(); }
-
-    misGraficos[id] = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: puntos.map(p => p.f),
-            datasets: [{
-                label: label,
-                data: puntos.map(p => p.v),
-                borderColor: color,
-                tension: 0.4,
-                fill: false
-            }]
-        },
-        options: {
-            scales: {
-                y: { ticks: {color: 'white'} },
-                x: { ticks: {color: 'white'} }
-            },
-            plugins: { legend: { labels: {color: 'white'} } }
+    <style>
+        :root { --accent: #C8943A; }
+        body { margin: 0; background: #0b0d0f; color: white; font-family: 'Segoe UI', sans-serif; }
+        
+        /* Fondo de meteorología aplicada */
+        .hero { 
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&q=80');
+            background-size: cover; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
         }
-    });
-}
-</script>
+
+        #app-container { display: none; } /* Se oculta hasta hacer login */
+        .sidebar { position: fixed; left: 0; width: 350px; height: 100%; background: #161b22; overflow-y: auto; padding: 20px; z-index: 1000; }
+        #map { position: fixed; right: 0; width: calc(100% - 390px); height: 100vh; }
+        
+        .card-parcela { background: #21262d; border: 1px solid #30363d; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: 0.3s; }
+        .card-parcela:hover { border-color: var(--accent); }
+        
+        input { width: 100%; padding: 10px; margin: 10px 0; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 5px; }
+        button { background: var(--accent); color: black; border: none; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        .logout-btn { background: #da3633; width: auto; position: absolute; top: 10px; right: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="hero-screen" class="hero">
+        <h1>AGRO WEATHER 2026</h1>
+        <p>Meteorología inteligente conectada a SIGPAC para una agricultura de precisión.</p>
+        
+        <div id="auth-box" style="width: 300px;">
+            <div id="login-form">
+                <input type="text" id="log-user" placeholder="Email o Usuario">
+                <input type="password" id="log-pass" placeholder="Contraseña">
+                <button onclick="auth('login')">Iniciar Sesión</button>
+                <p onclick="toggleAuth(true)" style="cursor:pointer; font-size: 12px; margin-top: 10px;">¿No tienes cuenta? Regístrate aquí</p>
+            </div>
+            
+            <div id="register-form" style="display:none;">
+                <input type="text" id="reg-user" placeholder="Nombre de Usuario">
+                <input type="email" id="reg-email" placeholder="Correo Electrónico">
+                <input type="password" id="reg-pass" placeholder="Contraseña">
+                <input type="password" id="reg-conf" placeholder="Confirmar Contraseña">
+                <button onclick="auth('registro')">Crear Cuenta</button>
+                <p onclick="toggleAuth(false)" style="cursor:pointer; font-size: 12px; margin-top: 10px;">¿Ya eres usuario? Inicia sesión</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-container">
+        <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+        
+        <div class="sidebar">
+            <h2 style="color: var(--accent);">Mis Parcelas</h2>
+            <div id="lista-parcelas"></div>
+            
+            <hr>
+            
+            <div id="form-guardar">
+                <h3>Nueva Parcela</h3>
+                <input type="text" id="p-nombre" placeholder="Nombre (ej: El Olivar)">
+                <input type="text" id="p-prov" placeholder="Provincia (Autocompletado)" readonly>
+                <input type="text" id="p-muni" placeholder="Municipio" readonly>
+                <input type="text" id="p-cult" placeholder="Cultivo (Manual)">
+                <button onclick="guardarParcela()">Guardar Parcela Dibujada</button>
+            </div>
+
+            <div id="det-panel" style="display:none; margin-top: 20px;">
+                <h3 id="det-titulo" style="color: var(--accent);"></h3>
+                <div id="det-info"></div>
+                <canvas id="chartDiario"></canvas>
+                <canvas id="chartMensual"></canvas>
+                <canvas id="chartAnual"></canvas>
+                <canvas id="chartHist"></canvas>
+            </div>
+        </div>
+        
+        <div id="map"></div>
+    </div>
+
+    <script>
+        let map, drawControl, drawnItems, currentPolygon;
+        let misGraficos = {};
+
+        // 1. INICIALIZAR MAPA Y DIBUJO
+        function initMap() {
+            map = L.map('map').setView([40.4167, -3.7037], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+
+            drawControl = new L.Control.Draw({
+                draw: { polygon: true, polyline: false, rectangle: true, circle: false, marker: false },
+                edit: { featureGroup: drawnItems }
+            });
+            map.addControl(drawControl);
+
+            map.on(L.Draw.Event.CREATED, function (e) {
+                drawnItems.clearLayers();
+                let layer = e.layer;
+                drawnItems.addLayer(layer);
+                currentPolygon = layer.toGeoJSON();
+                
+                // SIMULACIÓN AUTORELLENO SIGPAC/MATEO
+                document.getElementById('p-prov').value = "Madrid";
+                document.getElementById('p-muni').value = "Getafe";
+            });
+        }
+
+        // 2. AUTENTICACIÓN
+        async function auth(tipo) {
+            const data = tipo === 'login' ? 
+                { emailOrUsername: id('log-user').value, password: id('log-pass').value } :
+                { username: id('reg-user').value, email: id('reg-email').value, password: id('reg-pass').value, confirm_password: id('reg-conf').value };
+
+            const res = await fetch(`/api/auth/${tipo}`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const resData = await res.json();
+            if (resData.token) {
+                localStorage.setItem('token', resData.token);
+                id('hero-screen').style.display = 'none';
+                id('app-container').style.display = 'block';
+                initMap();
+                cargarParcelas();
+            } else { alert(resData.error); }
+        }
+
+        // 3. GRÁFICOS Y DETALLES
+        async function verDetalles(idParcela) {
+            const res = await fetch(`/api/parcelas/${idParcela}/datos_completos`, {
+                headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
+            });
+            const r = await res.json();
+            const d = r.data;
+
+            id('det-panel').style.display = 'block';
+            id('det-titulo').innerText = r.parcela;
+            id('det-info').innerHTML = `Cultivo: ${d.info_sigpac.cultivo}<br>Sup: ${d.info_sigpac.superficie}ha`;
+
+            pintar('chartDiario', 'Lluvia Diaria', d.graficos.diario, '#C8943A');
+            pintar('chartMensual', 'Mensual', d.graficos.mensual, '#2ecc71');
+            pintar('chartAnual', 'Anual', d.graficos.anual, '#3498db');
+            pintar('chartHist', 'Histórico', d.graficos.historico, '#e74c3c');
+        }
+
+        function pintar(cid, label, puntos, color) {
+            if (misGraficos[cid]) misGraficos[cid].destroy();
+            misGraficos[cid] = new Chart(id(cid).getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: puntos.map(p => p.f),
+                    datasets: [{ label: label, data: puntos.map(p => p.v), borderColor: color }]
+                },
+                options: { scales: { y: { ticks: {color: 'white'} } } }
+            });
+        }
+
+        // Helpers
+        function id(name) { return document.getElementById(name); }
+        function toggleAuth(reg) { id('login-form').style.display = reg ? 'none' : 'block'; id('register-form').style.display = reg ? 'block' : 'none'; }
+        function logout() { localStorage.clear(); location.reload(); }
+
+        async function guardarParcela() {
+            const data = {
+                nombre: id('p-nombre').value, provincia: id('p-prov').value, municipio: id('p-muni').value,
+                cultivo: id('p-cult').value, superficie: 1.5, geometria: currentPolygon
+            };
+            await fetch('/api/parcelas', {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token')},
+                body: JSON.stringify(data)
+            });
+            cargarParcelas();
+        }
+
+        async function cargarParcelas() {
+            const res = await fetch('/api/parcelas', { headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')} });
+            const data = await res.json();
+            id('lista-parcelas').innerHTML = data.parcelas.map(p => `
+                <div class="card-parcela" onclick="verDetalles(${p.id})">
+                    <b>${p.nombre}</b><br><small>${p.provincia}</small>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
