@@ -3,53 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agro Weather PWA</title>
+    <title>Agro Weather</title>
     <link rel="manifest" href="/manifest.json">
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <style>
-        :root { --gold: #C8943A; --dark: #0b0d0f; }
-        body { margin: 0; background: var(--dark); color: white; font-family: sans-serif; }
-        .hero { height: 100vh; background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2000'); background-size: cover; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        #app-container { display: none; grid-template-columns: 350px 1fr; height: 100vh; }
+        :root { --gold: #C8943A; --bg: #0b0d0f; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
+        .hero { height: 100vh; background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2000'); background-size: cover; display: flex; flex-direction: column; align-items: center; justify-content: center; position: absolute; width: 100%; z-index: 2000; }
+        #app-container { display: grid; grid-template-columns: 350px 1fr; height: 100vh; visibility: hidden; }
         .sidebar { background: #161b22; padding: 20px; overflow-y: auto; border-right: 1px solid #30363d; }
-        #map { width: 100%; height: 100vh; }
+        #map { height: 100vh; }
         input { width: 100%; padding: 10px; margin: 5px 0; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; background: var(--gold); color: black; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 5px; }
+        button { width: 100%; background: var(--gold); border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
         .card-parcela { background: #21262d; border: 1px solid #30363d; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; }
+        canvas { margin-top: 20px; }
     </style>
 </head>
 <body>
 
     <div id="hero-screen" class="hero">
-        <h1 style="color: var(--gold);">AGRO WEATHER</h1>
+        <h1 style="color: var(--gold);">AGRO WEATHER MASTER</h1>
         <div id="auth-box" style="width: 300px;">
-            <div id="login-form">
-                <input type="text" id="l-user" placeholder="Usuario">
-                <input type="password" id="l-pass" placeholder="Contraseña">
-                <button onclick="auth('login')">Entrar</button>
-                <p onclick="toggleA(true)" style="cursor:pointer; font-size:12px;">¿No tienes cuenta? Registro</p>
-            </div>
-            <div id="register-form" style="display:none;">
-                <input type="text" id="r-user" placeholder="Usuario">
+            <input type="text" id="l-user" placeholder="Usuario / Email">
+            <input type="password" id="l-pass" placeholder="Contraseña">
+            <div id="reg-fields" style="display:none;">
                 <input type="email" id="r-mail" placeholder="Email">
-                <input type="password" id="r-pass" placeholder="Contraseña">
-                <input type="password" id="r-conf" placeholder="Confirmar">
-                <button onclick="auth('registro')">Registrar</button>
-                <p onclick="toggleA(false)" style="cursor:pointer; font-size:12px;">¿Ya tienes cuenta? Login</p>
+                <input type="password" id="r-conf" placeholder="Confirmar Contraseña">
             </div>
+            <button id="btn-auth" onclick="handleAuth()">Entrar</button>
+            <p onclick="toggleAuth()" id="toggle-txt" style="font-size: 12px; cursor: pointer; margin-top: 10px;">¿No tienes cuenta? Regístrate</p>
         </div>
     </div>
 
     <div id="app-container">
         <div class="sidebar">
             <button onclick="logout()" style="background:#da3633; color:white;">Cerrar Sesión</button>
-            <h2>Mis Parcelas</h2>
+            <h2 style="color: var(--gold);">Mis Parcelas</h2>
             <div id="lista-parcelas"></div>
             <hr>
             <h3>Nueva Parcela</h3>
@@ -57,8 +50,9 @@
             <input type="text" id="p-pro" placeholder="Provincia (Auto)" readonly>
             <input type="text" id="p-mun" placeholder="Municipio (Auto)" readonly>
             <input type="text" id="p-cul" placeholder="Cultivo">
-            <button onclick="saveP()">Guardar Dibujo</button>
-            <div id="detalles" style="display:none; margin-top:20px;">
+            <button onclick="saveParcela()">Guardar Polígono</button>
+            
+            <div id="detalles" style="display:none; margin-top:30px;">
                 <h3 id="det-tit" style="color: var(--gold);"></h3>
                 <canvas id="chartDiario"></canvas>
                 <canvas id="chartMensual"></canvas>
@@ -70,15 +64,21 @@
     </div>
 
     <script>
-        let map, drawnItems, currentGeom, charts = {};
+        let map, drawnItems, currentGeom, charts = {}, isReg = false;
 
-        function toggleA(r) { document.getElementById('login-form').style.display = r?'none':'block'; document.getElementById('register-form').style.display = r?'block':'none'; }
-        function logout() { localStorage.clear(); location.reload(); }
+        function toggleAuth() {
+            isReg = !isReg;
+            document.getElementById('reg-fields').style.display = isReg ? 'block' : 'none';
+            document.getElementById('btn-auth').innerText = isReg ? 'Crear Cuenta' : 'Entrar';
+        }
 
-        async function auth(t) {
-            const body = t==='login' ? { emailOrUsername: id('l-user').value, password: id('l-pass').value } : 
-                         { username: id('r-user').value, email: id('r-mail').value, password: id('r-pass').value, confirm_password: id('r-conf').value };
-            const res = await fetch(`/api/auth/${t}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+        async function handleAuth() {
+            const url = isReg ? '/api/auth/registro' : '/api/auth/login';
+            const body = isReg ? 
+                { username: id('l-user').value, email: id('r-mail').value, password: id('l-pass').value, confirm_password: id('r-conf').value } :
+                { emailOrUsername: id('l-user').value, password: id('l-pass').value };
+
+            const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
             const data = await res.json();
             if(data.token) { localStorage.setItem('token', data.token); location.reload(); } else { alert(data.error); }
         }
@@ -86,9 +86,10 @@
         window.onload = () => {
             if(localStorage.getItem('token')) {
                 id('hero-screen').style.display = 'none';
+                id('app-container').style.visibility = 'visible';
                 id('app-container').style.display = 'grid';
                 initMap();
-                loadP();
+                loadParcelas();
             }
         };
 
@@ -102,39 +103,41 @@
                 drawnItems.clearLayers();
                 drawnItems.addLayer(e.layer);
                 currentGeom = e.layer.toGeoJSON();
-                id('p-pro').value = "Madrid"; id('p-mun').value = "Getafe";
+                id('p-pro').value = "Detectado"; id('p-mun').value = "SIGPAC";
             });
         }
 
-        async function saveP() {
+        async function saveParcela() {
+            if(!currentGeom) return alert("Dibuja primero el polígono");
             const body = { nombre: id('p-nom').value, provincia: id('p-pro').value, municipio: id('p-mun').value, cultivo: id('p-cul').value, superficie: 1.0, geometria: currentGeom };
             await fetch('/api/parcelas', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+localStorage.getItem('token')}, body: JSON.stringify(body) });
-            loadP();
+            loadParcelas();
         }
 
-        async function loadP() {
+        async function loadParcelas() {
             const res = await fetch('/api/parcelas', { headers: {'Authorization': 'Bearer '+localStorage.getItem('token')} });
             const d = await res.json();
-            id('lista-parcelas').innerHTML = d.parcelas.map(p => `<div class="card-parcela" onclick="verD(${p.id})"><b>${p.nombre}</b></div>`).join('');
+            id('lista-parcelas').innerHTML = d.parcelas.map(p => `<div class="card-parcela" onclick="verDetalles(${p.id})"><b>${p.nombre}</b></div>`).join('');
         }
 
-        async function verD(idP) {
-            const res = await fetch(`/api/parcelas/${idP}/datos_completos`, { headers: {'Authorization': 'Bearer '+localStorage.getItem('token')} });
+        async function verDetalles(pid) {
+            const res = await fetch(`/api/parcelas/${pid}/datos_completos`, { headers: {'Authorization': 'Bearer '+localStorage.getItem('token')} });
             const r = await res.json();
             id('detalles').style.display = 'block';
             id('det-tit').innerText = r.parcela;
-            pintar('chartDiario', 'Diario', r.data.graficos.diario, '#C8943A');
-            pintar('chartMensual', 'Mensual', r.data.graficos.mensual, '#2ecc71');
-            pintar('chartAnual', 'Anual', r.data.graficos.anual, '#3498db');
+            pintar('chartDiario', 'Hoy (mm)', r.data.graficos.diario, '#C8943A');
+            pintar('chartMensual', 'Mes (mm)', r.data.graficos.mensual, '#2ecc71');
+            pintar('chartAnual', 'Año (mm)', r.data.graficos.anual, '#3498db');
             pintar('chartHist', 'Histórico', r.data.graficos.historico, '#e74c3c');
         }
 
         function pintar(cid, l, p, c) {
             if(charts[cid]) charts[cid].destroy();
-            charts[cid] = new Chart(id(cid), { type: 'line', data: { labels: p.map(x=>x.f), datasets: [{ label: l, data: p.map(x=>x.v), borderColor: c }] } });
+            charts[cid] = new Chart(id(cid), { type: 'line', data: { labels: p.map(x=>x.f), datasets: [{ label: l, data: p.map(x=>x.v), borderColor: c, tension: 0.3 }] }, options: { scales: { y: { ticks: {color: 'white'} } } } });
         }
 
         function id(i) { return document.getElementById(i); }
+        function logout() { localStorage.clear(); location.reload(); }
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/service-worker.js'); }
     </script>
 </body>
