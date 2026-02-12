@@ -6,7 +6,7 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# --- CONFIGURACIÓN DE SEGURIDAD ---
+# --- CONFIGURACIÓN ---
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'agro_secret_2026')
 app.config['JWT_SECRET'] = os.environ.get('JWT_SECRET', 'jwt_agro_key')
 uri = os.environ.get('DATABASE_URL', 'sqlite:///sigpac.db')
@@ -16,7 +16,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# --- RUTAS CRÍTICAS PARA PWA (Evitan pantalla en blanco) ---
+# --- RUTAS PWA ---
 @app.route('/manifest.json')
 def serve_manifest():
     return send_from_directory('static', 'manifest.json')
@@ -25,7 +25,7 @@ def serve_manifest():
 def serve_sw():
     return send_from_directory('static', 'service-worker.js')
 
-# --- MODELOS DE DATOS ---
+# --- MODELOS ---
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -41,12 +41,14 @@ class Parcela(db.Model):
     municipio = db.Column(db.String(100))
     cultivo = db.Column(db.String(100))
     superficie = db.Column(db.Float)
-    geometria = db.Column(db.Text) # GeoJSON del polígono
+    geometria = db.Column(db.Text) # Aquí se guarda el dibujo del mapa
 
 with app.app_context():
+    # Si quieres resetear la base de datos para arreglar el error de la columna:
+    # db.drop_all() 
     db.create_all()
 
-# --- DECORADOR DE SESIÓN ---
+# --- AUTH MIDDLEWARE ---
 def login_requerido(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -58,17 +60,15 @@ def login_requerido(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- RUTAS API ---
+# --- RUTAS ---
 @app.route('/')
 def index(): return render_template('index.html')
 
 @app.route('/api/auth/registro', methods=['POST'])
 def registro():
     data = request.json
-    if data['password'] != data.get('confirm_password'):
-        return jsonify({'error': 'Contraseñas no coinciden'}), 400
-    if Usuario.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'El email ya está registrado'}), 400
+    if data.get('password') != data.get('confirm_password'):
+        return jsonify({'error': 'Las contraseñas no coinciden'}), 400
     u = Usuario(username=data['username'], email=data['email'], 
                 password=generate_password_hash(data['password']))
     db.session.add(u); db.session.commit()
@@ -82,7 +82,7 @@ def login():
     if u and check_password_hash(u.password, data['password']):
         token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
         return jsonify({'token': token, 'username': u.username})
-    return jsonify({'error': 'Credenciales erróneas'}), 401
+    return jsonify({'error': 'Credenciales incorrectas'}), 401
 
 @app.route('/api/parcelas', methods=['GET', 'POST'])
 @login_requerido
@@ -95,8 +95,9 @@ def gestionar_parcelas():
                     geometria=json.dumps(data['geometria']))
         db.session.add(p); db.session.commit()
         return jsonify({'id': p.id}), 201
+    
     parcelas = Parcela.query.filter_by(user_id=request.current_user_id).all()
-    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'provincia': x.provincia} for x in parcelas]})
+    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre} for x in parcelas]})
 
 @app.route('/api/parcelas/<int:id>/datos_completos', methods=['GET'])
 @login_requerido
@@ -107,10 +108,10 @@ def datos_completos(id):
         "data": {
             "info_sigpac": {"provincia": p.provincia, "municipio": p.municipio, "cultivo": p.cultivo},
             "graficos": {
-                "diario": [{"f": "08h", "v": 2.5}, {"f": "14h", "v": 10}, {"f": "21h", "v": 4}],
-                "mensual": [{"f": "Sem 1", "v": 22}, {"f": "Sem 2", "v": 48}, {"f": "Sem 3", "v": 12}],
-                "anual": [{"f": "2024", "v": 520}, {"f": "2025", "v": 490}],
-                "historico": [{"f": "Media", "v": 500}, {"f": "Actual", "v": 490}]
+                "diario": [{"f": "08h", "v": 2}, {"f": "14h", "v": 15}, {"f": "20h", "v": 5}],
+                "mensual": [{"f": "Sem 1", "v": 20}, {"f": "Sem 2", "v": 55}, {"f": "Sem 3", "v": 15}],
+                "anual": [{"f": "2024", "v": 510}, {"f": "2025", "v": 480}],
+                "historico": [{"f": "Media", "v": 490}, {"f": "Actual", "v": 480}]
             }
         }
     })
