@@ -1,16 +1,19 @@
-<div id="det-panel" style="display:none; padding: 15px; background: #222; border: 1px solid #C8943A; border-radius: 10px; margin-top: 15px;">
-    <h3 id="det-nombre" style="color: #C8943A;"></h3>
-    <div id="det-texto" style="color: white; font-size: 13px; margin-bottom: 20px;"></div>
-    
-    <div style="margin-bottom: 20px;"><canvas id="chartDiario"></canvas></div>
-    <div style="margin-bottom: 20px;"><canvas id="chartMensual"></canvas></div>
-    <div style="margin-bottom: 20px;"><canvas id="chartAnual"></canvas></div>
-    <div style="margin-bottom: 20px;"><canvas id="chartHist"></canvas></div>
+<div id="det-panel" class="sidebar-section" style="display:none; padding:15px; background:#1a1a1a; border:1px solid #C8943A; margin-top:20px;">
+    <h3 id="det-nombre" style="color:#C8943A;"></h3>
+    <div id="det-texto" style="color:white; margin-bottom:20px;"></div>
+
+    <canvas id="chartDiario" style="margin-bottom:20px;"></canvas>
+    <canvas id="chartMensual" style="margin-bottom:20px;"></canvas>
+    <canvas id="chartAnual" style="margin-bottom:20px;"></canvas>
+    <canvas id="chartHist" style="margin-bottom:20px;"></canvas>
+
+    <button onclick="document.getElementById('det-panel').style.display='none'">Cerrar</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// TU FUNCIÓN (Aumentada para no duplicar gráficos)
+let misGraficos = {}; // Para evitar errores de "canvas in use"
+
 async function verDetalles(id) {
     const res = await fetch(`/api/parcelas/${id}/datos_completos`, {
         headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
@@ -21,11 +24,12 @@ async function verDetalles(id) {
     document.getElementById('det-panel').style.display = 'block';
     document.getElementById('det-nombre').innerText = result.parcela;
     document.getElementById('det-texto').innerHTML = `
-        Provincia: ${d.info_sigpac.provincia}<br>
-        Municipio: ${d.info_sigpac.municipio}<br>
-        Cultivo: ${d.info_sigpac.cultivo}
+        <b>Provincia:</b> ${d.info_sigpac.provincia}<br>
+        <b>Municipio:</b> ${d.info_sigpac.municipio}<br>
+        <b>Cultivo:</b> ${d.info_sigpac.cultivo}
     `;
 
+    // Pintar los 4 gráficos solicitados
     pintarGrafico('chartDiario', 'Lluvia Diaria (mm)', d.graficos.diario, '#C8943A');
     pintarGrafico('chartMensual', 'Acumulado Mensual', d.graficos.mensual, '#2ecc71');
     pintarGrafico('chartAnual', 'Acumulado Anual', d.graficos.anual, '#3498db');
@@ -34,11 +38,9 @@ async function verDetalles(id) {
 
 function pintarGrafico(id, label, puntos, color) {
     const ctx = document.getElementById(id).getContext('2d');
-    
-    // Aumento: Destruir el gráfico anterior si existe para que no parpadee
-    if (window[id + '_chart']) { window[id + '_chart'].destroy(); }
+    if (misGraficos[id]) { misGraficos[id].destroy(); }
 
-    window[id + '_chart'] = new Chart(ctx, {
+    misGraficos[id] = new Chart(ctx, {
         type: 'line',
         data: {
             labels: puntos.map(p => p.f),
