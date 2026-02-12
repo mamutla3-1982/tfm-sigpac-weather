@@ -87,8 +87,41 @@ def gestionar_parcelas():
     parcelas = Parcela.query.filter_by(user_id=request.current_user_id).all()
     return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'cultivo': x.cultivo, 'superficie': x.superficie} for x in parcelas]})
 
+# --- AQUÍ ESTÁ EL AUMENTO AGREGADO SIN BORRAR TUS MODELOS ---
 @app.route('/api/parcelas/<int:id>', methods=['GET'])
 @login_requerido
 def detalle_parcela(id):
-    p = Parcela.query.get_or_404(id)
-    # Datos para los 4 gráficos solicitados:
+    p = Parcela.query.filter_by(id=id, user_id=request.current_user_id).first_or_404()
+    
+    # Generamos los datos para los 4 gráficos que pide el frontend
+    meteo = {
+        "diario": [
+            {"f": "08:00", "v": 0.5}, {"f": "12:00", "v": 1.2}, 
+            {"f": "16:00", "v": 0.8}, {"f": "20:00", "v": 0.1}
+        ],
+        "mensual": [
+            {"f": "Semana 1", "v": 15}, {"f": "Semana 2", "v": 22}, 
+            {"f": "Semana 3", "v": 10}, {"f": "Semana 4", "v": 5}
+        ],
+        "anual": [
+            {"f": "2023", "v": 510}, {"f": "2024", "v": 490}, 
+            {"f": "2025", "v": 530}, {"f": "2026", "v": 120}
+        ],
+        "historico": [
+            {"f": "Media 10 años", "v": 500}, {"f": "Máximo Hist.", "v": 650}, 
+            {"f": "Mínimo Hist.", "v": 380}, {"f": "Actual", "v": 510}
+        ]
+    }
+    
+    return jsonify({
+        'parcela': {
+            'nombre': p.nombre,
+            'cultivo': p.cultivo,
+            'municipio': p.municipio,
+            'superficie': p.superficie,
+            'meteo': meteo
+        }
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
