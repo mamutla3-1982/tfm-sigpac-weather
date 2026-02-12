@@ -17,22 +17,110 @@ let parcelaLayer = L.geoJSON(null, {
 }).addTo(map);
 
 // -----------------------------
-// SELECTORES SIGPAC (vacíos por ahora)
+// SELECTORES SIGPAC
 // -----------------------------
 
 async function cargarProvincias() {
-    // Aquí pondremos el WFS SIGPAC real
+    const url = "/proxy?url=" + encodeURIComponent(
+        "https://wms.mapa.gob.es/sigpac/ows?service=WFS&request=GetFeature&typeName=sigpac:provincia&outputFormat=application/json"
+    );
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    provincia.innerHTML = "<option value=''>Seleccione provincia</option>";
+
+    data.features.forEach(f => {
+        const cpro = f.properties.CPRO;
+        const nombre = f.properties.PROVINCIA;
+        provincia.innerHTML += `<option value="${cpro}">${cpro} - ${nombre}</option>`;
+    });
 }
 
-async function cargarMunicipios(cpro) {}
-async function cargarPoligonos(cpro, cmun) {}
-async function cargarParcelas(cpro, cmun, pol) {}
-async function cargarRecintos(cpro, cmun, pol, par) {}
+async function cargarMunicipios(cpro) {
+    municipio.innerHTML = "";
+    poligono.innerHTML = "";
+    parcela.innerHTML = "";
+    recinto.innerHTML = "";
+
+    const url = "/proxy?url=" + encodeURIComponent(
+        `https://wms.mapa.gob.es/sigpac/ows?service=WFS&request=GetFeature&typeName=sigpac:municipio&cpro=${cpro}&outputFormat=application/json`
+    );
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    municipio.innerHTML = "<option value=''>Seleccione municipio</option>";
+
+    data.features.forEach(f => {
+        const cmun = f.properties.CMUN;
+        const nombre = f.properties.MUNICIPIO;
+        municipio.innerHTML += `<option value="${cmun}">${cmun} - ${nombre}</option>`;
+    });
+}
+
+async function cargarPoligonos(cpro, cmun) {
+    poligono.innerHTML = "";
+    parcela.innerHTML = "";
+    recinto.innerHTML = "";
+
+    const url = "/proxy?url=" + encodeURIComponent(
+        `https://wms.mapa.gob.es/sigpac/ows?service=WFS&request=GetFeature&typeName=sigpac:poligono&cpro=${cpro}&cmun=${cmun}&outputFormat=application/json`
+    );
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    poligono.innerHTML = "<option value=''>Seleccione polígono</option>";
+
+    data.features.forEach(f => {
+        const pol = f.properties.POLIGONO;
+        poligono.innerHTML += `<option value="${pol}">${pol}</option>`;
+    });
+}
+
+async function cargarParcelas(cpro, cmun, pol) {
+    parcela.innerHTML = "";
+    recinto.innerHTML = "";
+
+    const url = "/proxy?url=" + encodeURIComponent(
+        `https://wms.mapa.gob.es/sigpac/ows?service=WFS&request=GetFeature&typeName=sigpac:parcela&cpro=${cpro}&cmun=${cmun}&poligono=${pol}&outputFormat=application/json`
+    );
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    parcela.innerHTML = "<option value=''>Seleccione parcela</option>";
+
+    data.features.forEach(f => {
+        const par = f.properties.PARCELA;
+        parcela.innerHTML += `<option value="${par}">${par}</option>`;
+    });
+}
+
+async function cargarRecintos(cpro, cmun, pol, par) {
+    recinto.innerHTML = "";
+
+    const url = "/proxy?url=" + encodeURIComponent(
+        `https://wms.mapa.gob.es/sigpac/ows?service=WFS&request=GetFeature&typeName=sigpac:recinto&cpro=${cpro}&cmun=${cmun}&poligono=${pol}&parcela=${par}&outputFormat=application/json`
+    );
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    recinto.innerHTML = "<option value=''>Seleccione recinto</option>";
+
+    data.features.forEach(f => {
+        const rec = f.properties.RECINTO;
+        recinto.innerHTML += `<option value="${rec}">${rec}</option>`;
+    });
+}
 
 // Eventos
-document.getElementById('provincia').addEventListener('change', e => {
-    cargarMunicipios(e.target.value);
-});
+provincia.addEventListener("change", () => cargarMunicipios(provincia.value));
+municipio.addEventListener("change", () => cargarPoligonos(provincia.value, municipio.value));
+poligono.addEventListener("change", () => cargarParcelas(provincia.value, municipio.value, poligono.value));
+parcela.addEventListener("change", () => cargarRecintos(provincia.value, municipio.value, poligono.value, parcela.value));
 
 // -----------------------------
 // BOTÓN CARGAR PARCELA
@@ -44,43 +132,4 @@ document.getElementById('btn-cargar').addEventListener('click', async () => {
     const par = parcela.value;
     const rec = recinto.value;
 
-    const resp = await fetch(`/cargar_parcela?cpro=${cpro}&cmun=${cmun}&pol=${pol}&par=${par}&rec=${rec}`);
-    const geojson = await resp.json();
-
-    parcelaLayer.clearLayers();
-    parcelaLayer.addData(geojson);
-    map.fitBounds(parcelaLayer.getBounds());
-});
-
-// -----------------------------
-// BOTÓN GUARDAR PARCELA
-// -----------------------------
-document.getElementById('btn-guardar').addEventListener('click', async () => {
-    const resp = await fetch("/guardar_parcela", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            provincia: provincia.value,
-            municipio: municipio.value,
-            poligono: poligono.value,
-            parcela: parcela.value,
-            recinto: recinto.value
-        })
-    });
-
-    const data = await resp.json();
-    alert(data.mensaje);
-});
-
-// -----------------------------
-// GRÁFICOS (vacíos por ahora)
-// -----------------------------
-new Chart(document.getElementById("graficoMensual"), {
-    type: "bar",
-    data: { labels: [], datasets: [{ label: "Lluvia (mm)", data: [], backgroundColor: "#2f6b3a" }] }
-});
-
-new Chart(document.getElementById("graficoAcumulada"), {
-    type: "line",
-    data: { labels: [], datasets: [{ label: "Lluvia acumulada", data: [], borderColor: "#2f6b3a" }] }
-});
+    const url = "/proxy?url=" + encodeURIComponent
