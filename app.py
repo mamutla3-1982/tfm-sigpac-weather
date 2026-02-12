@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import SessionLocal, Usuario, Parcela, init_db
 from flask_cors import CORS
 import jwt
 import datetime
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -47,6 +48,18 @@ def usuario_desde_header():
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+# ------------------ PROXY SIGPAC (NUEVO) ------------------
+
+@app.route("/proxy")
+def proxy():
+    url = request.args.get("url")
+    if not url:
+        return jsonify({"error": "Falta parámetro URL"}), 400
+
+    r = requests.get(url)
+    return Response(r.content, content_type=r.headers.get("Content-Type", "application/json"))
 
 
 # ------------------ AUTH ------------------
