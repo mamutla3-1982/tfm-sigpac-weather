@@ -8,7 +8,6 @@
   "background_color": "#1e3d59",
   "theme_color": "#1e3d59",
   "orientation": "portrait-primary",
-
   "icons": [
     {
       "src": "/static/img/marker-sigpacweather.png",
