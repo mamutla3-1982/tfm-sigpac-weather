@@ -7,12 +7,11 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# CONFIGURACIÓN
+# CONFIGURACIÓN ORIGINAL MANTENIDA
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'agro_2026_key')
 app.config['JWT_SECRET'] = os.environ.get('JWT_SECRET', 'jwt_agro_2026')
 app.config['AEMET_API_KEY'] = os.environ.get('AEMET_API_KEY', '')
 
-# Conexión PostgreSQL para Render
 uri = os.environ.get('DATABASE_URL', 'sqlite:///sigpac.db')
 if uri.startswith("postgres://"): uri = uri.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
@@ -20,7 +19,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# MODELOS
+# MODELOS ORIGINALES
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -40,7 +39,7 @@ class Parcela(db.Model):
 
 with app.app_context(): db.create_all()
 
-# MIDDLEWARE DE AUTENTICACIÓN
+# AUTH MIDDLEWARE
 def login_requerido(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -55,19 +54,26 @@ def login_requerido(f):
 @app.route('/')
 def index(): return render_template('index.html')
 
+# AUMENTO: RUTAS DE AUTH CLARAS (LOGIN Y REGISTRO)
 @app.route('/api/auth/registro', methods=['POST'])
 def registro():
     data = request.json
-    if Usuario.query.filter_by(email=data['email']).first(): return jsonify({'error': 'Email ya existe'}), 400
-    u = Usuario(username=data['username'], email=data['email'], password=generate_password_hash(data['password']))
+    if data['password'] != data.get('confirm_password'):
+        return jsonify({'error': 'Las contraseñas no coinciden'}), 400
+    if Usuario.query.filter_by(email=data['email']).first(): 
+        return jsonify({'error': 'El email ya está registrado'}), 400
+    
+    u = Usuario(username=data['username'], email=data['email'], 
+                password=generate_password_hash(data['password']))
     db.session.add(u); db.session.commit()
     token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
-    return jsonify({'token': token}), 201
+    return jsonify({'token': token, 'username': u.username}), 201
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.json
-    u = Usuario.query.filter((Usuario.email == data['emailOrUsername']) | (Usuario.username == data['emailOrUsername'])).first()
+    u = Usuario.query.filter((Usuario.email == data['emailOrUsername']) | 
+                             (Usuario.username == data['emailOrUsername'])).first()
     if u and check_password_hash(u.password, data['password']):
         token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
         return jsonify({'token': token, 'username': u.username})
@@ -78,50 +84,28 @@ def login():
 def gestionar_parcelas():
     if request.method == 'POST':
         data = request.json
-        p = Parcela(user_id=request.current_user_id, nombre=data['nombre'], provincia=data['provincia'],
-                    municipio=data['municipio'], cultivo=data['cultivo'], superficie=data['superficie'],
+        p = Parcela(user_id=request.current_user_id, nombre=data['nombre'], 
+                    provincia=data['provincia'], municipio=data['municipio'], 
+                    cultivo=data['cultivo'], superficie=data.get('superficie', 0),
                     centroide=json.dumps(data['centroide']))
         db.session.add(p); db.session.commit()
         return jsonify({'id': p.id}), 201
     
     parcelas = Parcela.query.filter_by(user_id=request.current_user_id).all()
-    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'cultivo': x.cultivo, 'superficie': x.superficie} for x in parcelas]})
+    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'cultivo': x.cultivo, 'mun': x.municipio} for x in parcelas]})
 
-# --- AQUÍ ESTÁ EL AUMENTO AGREGADO SIN BORRAR TUS MODELOS ---
 @app.route('/api/parcelas/<int:id>', methods=['GET'])
 @login_requerido
 def detalle_parcela(id):
-    p = Parcela.query.filter_by(id=id, user_id=request.current_user_id).first_or_404()
-    
-    # Generamos los datos para los 4 gráficos que pide el frontend
+    p = Parcela.query.get_or_404(id)
+    # AUMENTO: Datos simulados para los 4 gráficos (Diario, Mensual, Anual, Histórico)
     meteo = {
-        "diario": [
-            {"f": "08:00", "v": 0.5}, {"f": "12:00", "v": 1.2}, 
-            {"f": "16:00", "v": 0.8}, {"f": "20:00", "v": 0.1}
-        ],
-        "mensual": [
-            {"f": "Semana 1", "v": 15}, {"f": "Semana 2", "v": 22}, 
-            {"f": "Semana 3", "v": 10}, {"f": "Semana 4", "v": 5}
-        ],
-        "anual": [
-            {"f": "2023", "v": 510}, {"f": "2024", "v": 490}, 
-            {"f": "2025", "v": 530}, {"f": "2026", "v": 120}
-        ],
-        "historico": [
-            {"f": "Media 10 años", "v": 500}, {"f": "Máximo Hist.", "v": 650}, 
-            {"f": "Mínimo Hist.", "v": 380}, {"f": "Actual", "v": 510}
-        ]
+        "diario": [{"f": "08:00", "v": 0.2}, {"f": "14:00", "v": 1.5}, {"f": "20:00", "v": 0.8}],
+        "mensual": [{"f": "Sem 1", "v": 12}, {"f": "Sem 2", "v": 45}, {"f": "Sem 3", "v": 20}],
+        "anual": [{"f": "2024", "v": 520}, {"f": "2025", "v": 480}],
+        "historico": [{"f": "Media 10 años", "v": 500}, {"f": "Actual", "v": 490}]
     }
-    
-    return jsonify({
-        'parcela': {
-            'nombre': p.nombre,
-            'cultivo': p.cultivo,
-            'municipio': p.municipio,
-            'superficie': p.superficie,
-            'meteo': meteo
-        }
-    })
+    return jsonify({'parcela': {'nombre': p.nombre, 'meteo': meteo, 'municipio': p.municipio, 'provincia': p.provincia}})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
