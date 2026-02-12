@@ -1,144 +1,183 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agro Weather</title>
-    <link rel="manifest" href="/manifest.json">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root { --gold: #C8943A; --bg: #0b0d0f; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
-        .hero { height: 100vh; background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2000'); background-size: cover; display: flex; flex-direction: column; align-items: center; justify-content: center; position: absolute; width: 100%; z-index: 2000; }
-        #app-container { display: grid; grid-template-columns: 350px 1fr; height: 100vh; visibility: hidden; }
-        .sidebar { background: #161b22; padding: 20px; overflow-y: auto; border-right: 1px solid #30363d; }
-        #map { height: 100vh; }
-        input { width: 100%; padding: 10px; margin: 5px 0; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; background: var(--gold); border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        .card-parcela { background: #21262d; border: 1px solid #30363d; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; }
-        canvas { margin-top: 20px; }
-    </style>
+<meta charset="UTF-8">
+<title>TFM SIGPAC Weather</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<!-- Leaflet Draw -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
+#map {
+    height: 80vh;
+    width: 100%;
+}
+
+.header {
+    padding: 10px;
+    background: #1e3d59;
+    color: white;
+}
+
+.info-panel {
+    padding: 10px;
+    background: #f4f4f4;
+}
+
+button {
+    padding: 8px 12px;
+    margin: 5px;
+    cursor: pointer;
+}
+</style>
 </head>
+
 <body>
 
-    <div id="hero-screen" class="hero">
-        <h1 style="color: var(--gold);">AGRO WEATHER MASTER</h1>
-        <div id="auth-box" style="width: 300px;">
-            <input type="text" id="l-user" placeholder="Usuario / Email">
-            <input type="password" id="l-pass" placeholder="Contraseña">
-            <div id="reg-fields" style="display:none;">
-                <input type="email" id="r-mail" placeholder="Email">
-                <input type="password" id="r-conf" placeholder="Confirmar Contraseña">
-            </div>
-            <button id="btn-auth" onclick="handleAuth()">Entrar</button>
-            <p onclick="toggleAuth()" id="toggle-txt" style="font-size: 12px; cursor: pointer; margin-top: 10px;">¿No tienes cuenta? Regístrate</p>
-        </div>
-    </div>
+<div class="header">
+    <h2>🌾 SIGPAC Weather - Gestión de Parcelas</h2>
+    <button onclick="guardarParcela()">Guardar Parcela</button>
+    <button onclick="cerrarSesion()">Cerrar sesión</button>
+</div>
 
-    <div id="app-container">
-        <div class="sidebar">
-            <button onclick="logout()" style="background:#da3633; color:white;">Cerrar Sesión</button>
-            <h2 style="color: var(--gold);">Mis Parcelas</h2>
-            <div id="lista-parcelas"></div>
-            <hr>
-            <h3>Nueva Parcela</h3>
-            <input type="text" id="p-nom" placeholder="Nombre">
-            <input type="text" id="p-pro" placeholder="Provincia (Auto)" readonly>
-            <input type="text" id="p-mun" placeholder="Municipio (Auto)" readonly>
-            <input type="text" id="p-cul" placeholder="Cultivo">
-            <button onclick="saveParcela()">Guardar Polígono</button>
-            
-            <div id="detalles" style="display:none; margin-top:30px;">
-                <h3 id="det-tit" style="color: var(--gold);"></h3>
-                <canvas id="chartDiario"></canvas>
-                <canvas id="chartMensual"></canvas>
-                <canvas id="chartAnual"></canvas>
-                <canvas id="chartHist"></canvas>
-            </div>
-        </div>
-        <div id="map"></div>
-    </div>
+<div id="map"></div>
 
-    <script>
-        let map, drawnItems, currentGeom, charts = {}, isReg = false;
+<div class="info-panel">
+    <p><strong>Área calculada:</strong> <span id="area">0</span> ha</p>
+</div>
 
-        function toggleAuth() {
-            isReg = !isReg;
-            document.getElementById('reg-fields').style.display = isReg ? 'block' : 'none';
-            document.getElementById('btn-auth').innerText = isReg ? 'Crear Cuenta' : 'Entrar';
-        }
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-        async function handleAuth() {
-            const url = isReg ? '/api/auth/registro' : '/api/auth/login';
-            const body = isReg ? 
-                { username: id('l-user').value, email: id('r-mail').value, password: id('l-pass').value, confirm_password: id('r-conf').value } :
-                { emailOrUsername: id('l-user').value, password: id('l-pass').value };
+<!-- Leaflet Draw -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
-            const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
-            const data = await res.json();
-            if(data.token) { localStorage.setItem('token', data.token); location.reload(); } else { alert(data.error); }
-        }
+<script>
 
-        window.onload = () => {
-            if(localStorage.getItem('token')) {
-                id('hero-screen').style.display = 'none';
-                id('app-container').style.visibility = 'visible';
-                id('app-container').style.display = 'grid';
-                initMap();
-                loadParcelas();
-            }
-        };
+// ===============================
+// 1️⃣ Crear mapa
+// ===============================
+const map = L.map('map').setView([40.0, -3.5], 6);
 
-        function initMap() {
-            map = L.map('map').setView([40.41, -3.70], 6);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-            drawnItems = new L.FeatureGroup();
-            map.addLayer(drawnItems);
-            new L.Control.Draw({ draw: { polygon: true, marker: false, circle: false, polyline: false, rectangle: true } }).addTo(map);
-            map.on(L.Draw.Event.CREATED, (e) => {
-                drawnItems.clearLayers();
-                drawnItems.addLayer(e.layer);
-                currentGeom = e.layer.toGeoJSON();
-                id('p-pro').value = "Detectado"; id('p-mun').value = "SIGPAC";
-            });
-        }
+// OpenStreetMap base
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+}).addTo(map);
 
-        async function saveParcela() {
-            if(!currentGeom) return alert("Dibuja primero el polígono");
-            const body = { nombre: id('p-nom').value, provincia: id('p-pro').value, municipio: id('p-mun').value, cultivo: id('p-cul').value, superficie: 1.0, geometria: currentGeom };
-            await fetch('/api/parcelas', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+localStorage.getItem('token')}, body: JSON.stringify(body) });
-            loadParcelas();
-        }
+// ===============================
+// 2️⃣ Capa SIGPAC WMS
+// ===============================
+const sigpacLayer = L.tileLayer.wms("https://sigpac.mapa.es/fega/servicios/wms", {
+    layers: "PARCELA",
+    format: "image/png",
+    transparent: true,
+    version: "1.3.0"
+}).addTo(map);
 
-        async function loadParcelas() {
-            const res = await fetch('/api/parcelas', { headers: {'Authorization': 'Bearer '+localStorage.getItem('token')} });
-            const d = await res.json();
-            id('lista-parcelas').innerHTML = d.parcelas.map(p => `<div class="card-parcela" onclick="verDetalles(${p.id})"><b>${p.nombre}</b></div>`).join('');
-        }
+// ===============================
+// 3️⃣ Dibujo de polígonos
+// ===============================
+const drawnItems = new L.FeatureGroup();
+map.addLayer(drawnItems);
 
-        async function verDetalles(pid) {
-            const res = await fetch(`/api/parcelas/${pid}/datos_completos`, { headers: {'Authorization': 'Bearer '+localStorage.getItem('token')} });
-            const r = await res.json();
-            id('detalles').style.display = 'block';
-            id('det-tit').innerText = r.parcela;
-            pintar('chartDiario', 'Hoy (mm)', r.data.graficos.diario, '#C8943A');
-            pintar('chartMensual', 'Mes (mm)', r.data.graficos.mensual, '#2ecc71');
-            pintar('chartAnual', 'Año (mm)', r.data.graficos.anual, '#3498db');
-            pintar('chartHist', 'Histórico', r.data.graficos.historico, '#e74c3c');
-        }
+const drawControl = new L.Control.Draw({
+    edit: {
+        featureGroup: drawnItems
+    },
+    draw: {
+        polygon: true,
+        rectangle: false,
+        circle: false,
+        marker: false,
+        polyline: false,
+        circlemarker: false
+    }
+});
 
-        function pintar(cid, l, p, c) {
-            if(charts[cid]) charts[cid].destroy();
-            charts[cid] = new Chart(id(cid), { type: 'line', data: { labels: p.map(x=>x.f), datasets: [{ label: l, data: p.map(x=>x.v), borderColor: c, tension: 0.3 }] }, options: { scales: { y: { ticks: {color: 'white'} } } } });
-        }
+map.addControl(drawControl);
 
-        function id(i) { return document.getElementById(i); }
-        function logout() { localStorage.clear(); location.reload(); }
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/service-worker.js'); }
-    </script>
+let currentGeoJSON = null;
+
+// ===============================
+// 4️⃣ Evento cuando dibuja
+// ===============================
+map.on(L.Draw.Event.CREATED, function (event) {
+    drawnItems.clearLayers();
+    const layer = event.layer;
+    drawnItems.addLayer(layer);
+
+    currentGeoJSON = layer.toGeoJSON();
+
+    calcularArea(layer);
+});
+
+// ===============================
+// 5️⃣ Calcular área automática
+// ===============================
+function calcularArea(layer) {
+    const latlngs = layer.getLatLngs()[0];
+
+    const geojson = layer.toGeoJSON();
+    const area_m2 = turf.area(geojson);
+    const area_ha = area_m2 / 10000;
+
+    document.getElementById("area").innerText = area_ha.toFixed(2);
+}
+
+// ===============================
+// 6️⃣ Guardar parcela
+// ===============================
+async function guardarParcela() {
+
+    if (!currentGeoJSON) {
+        alert("Dibuja una parcela primero");
+        return;
+    }
+
+    const nombre = prompt("Nombre de la parcela:");
+
+    const response = await fetch("/api/parcelas", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("token")
+        },
+        body: JSON.stringify({
+            nombre: nombre,
+            superficie: document.getElementById("area").innerText,
+            geometria: currentGeoJSON
+        })
+    });
+
+    if (response.ok) {
+        alert("Parcela guardada correctamente");
+    } else {
+        alert("Error al guardar");
+    }
+}
+
+// ===============================
+// 7️⃣ Cerrar sesión
+// ===============================
+function cerrarSesion() {
+    localStorage.removeItem("token");
+    window.location.href = "/";
+}
+
+</script>
+
+<!-- Turf.js para cálculo de área -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
 </body>
 </html>
