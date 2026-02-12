@@ -1,104 +1,494 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>SIGPAC Weather</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>SIGPAC Weather</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Leaflet -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+<!-- Favicon -->
+<link rel="icon" href="/static/img/marker-sigpacweather.png">
 
-    <!-- Estilos generales -->
-    <link rel="stylesheet" href="/static/css/style.css">
+<!-- Manifest -->
+<link rel="manifest" href="/manifest.json">
 
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- Leaflet Draw -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #eef2f3;
+}
+
+/* Header */
+.header {
+    padding: 10px 20px;
+    background: #1e3d59;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h2 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.header h2 img {
+    height: 32px;
+    margin-right: 10px;
+}
+
+.header .auth-buttons button {
+    margin-left: 10px;
+}
+
+/* Vistas */
+.view {
+    display: none;
+    padding: 20px;
+}
+
+.view.active {
+    display: block;
+}
+
+/* Pantalla de inicio */
+#view-home {
+    min-height: calc(100vh - 60px);
+    background: url('https://images.pexels.com/photos/1595104/pexels-photo-1595104.jpeg?auto=compress&cs=tinysrgb&w=1600') center/cover no-repeat;
+    color: white;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.home-content {
+    max-width: 600px;
+    background: rgba(0,0,0,0.55);
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.home-content img {
+    width: 120px;
+    display: block;
+    margin-bottom: 20px;
+}
+
+/* Formularios */
+.auth-container {
+    max-width: 400px;
+    margin: 40px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.auth-container h3 {
+    margin-top: 0;
+}
+
+.auth-container label {
+    display: block;
+    margin-top: 10px;
+    font-size: 0.9rem;
+}
+
+.auth-container input {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    box-sizing: border-box;
+}
+
+.auth-container button {
+    margin-top: 15px;
+    width: 100%;
+}
+
+/* Mapa */
+#map {
+    height: 60vh;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.info-panel {
+    padding: 10px 20px;
+    background: #f4f4f4;
+}
+
+/* Tarjetas */
+.parcela-card {
+    width: 250px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.parcela-card img {
+    width: 40px;
+    float: right;
+}
+</style>
 </head>
+
 <body>
 
-<!-- HEADER -->
-<header class="main-header">
-    <div class="logo">🌾 SIGPAC Weather</div>
-    <nav>
-        <button class="nav-btn" onclick="UI.showHome()">Inicio</button>
-        <button class="nav-btn" id="loginBtn" onclick="UI.showLogin()">Iniciar sesión</button>
-        <button class="nav-btn" id="registerBtn" onclick="UI.showRegister()">Crear cuenta</button>
-        <button class="nav-btn" id="logoutBtn" onclick="Auth.logout()" style="display:none;">Cerrar sesión</button>
-    </nav>
-</header>
-
-<!-- VISTAS -->
-<div id="view-home" class="view active home-view">
-    <div class="home-overlay">
-        <h1>Meteorología Aplicada a la Agricultura</h1>
-        <p>Consulta lluvias de AEMET, dibuja tus parcelas en SIGPAC y guarda su historial.</p>
-        <button class="primary-btn" onclick="UI.showRegister()">Comenzar</button>
+<div class="header">
+    <h2>
+        <img src="/static/img/marker-sigpacweather.png">
+        SIGPAC Weather
+    </h2>
+    <div class="auth-buttons">
+        <span id="user-info" style="margin-right:10px;"></span>
+        <button id="btn-home" onclick="mostrarVista('home')">Inicio</button>
+        <button id="btn-parcelas" style="display:none;" onclick="cargarParcelas()">Mis Parcelas</button>
+        <button id="btn-login" onclick="mostrarVista('login')">Iniciar sesión</button>
+        <button id="btn-register" onclick="mostrarVista('register')">Crear cuenta</button>
+        <button id="btn-logout" style="display:none;" onclick="cerrarSesion()">Cerrar sesión</button>
     </div>
 </div>
 
-<div id="view-login" class="view auth-view">
-    <div class="auth-box">
-        <h2>Iniciar sesión</h2>
-        <input id="login-user" type="text" placeholder="Usuario o correo">
-        <input id="login-pass" type="password" placeholder="Contraseña">
-        <button onclick="Auth.login()">Entrar</button>
+<!-- VISTA INICIO -->
+<div id="view-home" class="view active">
+    <div class="home-content">
+        <img src="/static/img/marker-sigpacweather.png">
+        <h1>Plataforma SIGPAC Weather</h1>
+        <p>
+            Gestiona tus parcelas, visualiza SIGPAC y consulta datos de lluvia de AEMET.
+        </p>
+        <button onclick="mostrarVista('register')">Comenzar ahora</button>
     </div>
 </div>
 
-<div id="view-register" class="view auth-view">
-    <div class="auth-box">
-        <h2>Crear cuenta</h2>
-        <input id="reg-user" type="text" placeholder="Nombre de usuario">
-        <input id="reg-email" type="email" placeholder="Correo electrónico">
-        <input id="reg-pass" type="password" placeholder="Contraseña">
-        <input id="reg-pass2" type="password" placeholder="Confirmar contraseña">
-        <button onclick="Auth.register()">Registrarse</button>
+<!-- VISTA LOGIN -->
+<div id="view-login" class="view">
+    <div class="auth-container">
+        <h3>Iniciar sesión</h3>
+        <label>Email o usuario</label>
+        <input type="text" id="login-email">
+
+        <label>Contraseña</label>
+        <input type="password" id="login-password">
+
+        <button onclick="hacerLogin()">Entrar</button>
     </div>
 </div>
 
-<div id="view-app" class="view app-view">
-    <div class="sidebar">
+<!-- VISTA REGISTRO -->
+<div id="view-register" class="view">
+    <div class="auth-container">
+        <h3>Crear cuenta</h3>
 
-        <h2>Tus Parcelas</h2>
-        <div id="parcelas-list" class="parcelas-list">
-            <!-- Tarjetas dinámicas -->
-        </div>
+        <label>Usuario</label>
+        <input type="text" id="reg-username">
 
-        <button class="primary-btn" onclick="Parcelas.startDrawing()">Dibujar nueva parcela</button>
+        <label>Email</label>
+        <input type="email" id="reg-email">
+
+        <label>Contraseña</label>
+        <input type="password" id="reg-password">
+
+        <label>Confirmar contraseña</label>
+        <input type="password" id="reg-password2">
+
+        <button onclick="hacerRegistro()">Crear cuenta</button>
     </div>
+</div>
 
-    <div class="map-container">
-        <div id="map"></div>
+<!-- VISTA APP -->
+<div id="view-app" class="view">
+    <div>
+        <button onclick="guardarParcela()">Guardar Parcela</button>
+        <button onclick="cargarParcelas()">Ver Mis Parcelas</button>
     </div>
-
+    <div id="map"></div>
     <div class="info-panel">
-        <h3 id="parcela-nombre">Información</h3>
-
-        <p><strong>Provincia:</strong> <span id="inf-provincia"></span></p>
-        <p><strong>Municipio:</strong> <span id="inf-municipio"></span></p>
-        <p><strong>Recinto:</strong> <span id="inf-recinto"></span></p>
-        <p><strong>Superficie:</strong> <span id="inf-area"></span> ha</p>
-
-        <h3>Lluvia</h3>
-        <canvas id="grafico-diario"></canvas>
-        <canvas id="grafico-mensual"></canvas>
-        <canvas id="grafico-anual"></canvas>
-        <canvas id="grafico-historico"></canvas>
+        <p><strong>Área:</strong> <span id="area">0</span> ha</p>
+        <p id="detalle-parcela"></p>
+        <div id="lluvia-info"></div>
     </div>
 </div>
 
-<!-- SCRIPTS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- VISTA PARCELAS -->
+<div id="view-parcelas" class="view">
+    <h2>Mis Parcelas</h2>
+    <div id="parcelas-container" style="display:flex; flex-wrap:wrap; gap:15px;"></div>
+</div>
 
-<script src="/static/js/ui.js"></script>
-<script src="/static/js/auth.js"></script>
-<script src="/static/js/mapa.js"></script>
-<script src="/static/js/sigpac.js"></script>
-<script src="/static/js/parcelas.js"></script>
-<script src="/static/js/aemet.js"></script>
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet Draw -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<!-- Turf.js -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+<script>
+let map, drawnItems, currentGeoJSON = null;
+let parcelaSeleccionadaId = null;
+
+/* ============================
+   VISTAS
+============================ */
+function mostrarVista(nombre) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById(`view-${nombre}`).classList.add('active');
+}
+
+function actualizarEstadoAuth() {
+    const token = localStorage.getItem('token');
+    const username = localStorage.getItem('username');
+
+    document.getElementById('user-info').textContent = token ? `👤 ${username}` : "";
+
+    document.getElementById('btn-login').style.display = token ? "none" : "inline-block";
+    document.getElementById('btn-register').style.display = token ? "none" : "inline-block";
+    document.getElementById('btn-logout').style.display = token ? "inline-block" : "none";
+    document.getElementById('btn-parcelas').style.display = token ? "inline-block" : "none";
+
+    if (token) {
+        mostrarVista('app');
+        inicializarMapa();
+    } else {
+        mostrarVista('home');
+    }
+}
+
+/* ============================
+   REGISTRO
+============================ */
+async function hacerRegistro() {
+    const username = document.getElementById('reg-username').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const password2 = document.getElementById('reg-password2').value;
+
+    if (password !== password2) {
+        alert("Las contraseñas no coinciden");
+        return;
+    }
+
+    const resp = await fetch("/api/auth/registro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, email, password, confirm_password: password2 })
+    });
+
+    const data = await resp.json();
+    if (resp.ok) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("username", data.username);
+        actualizarEstadoAuth();
+    } else {
+        alert(data.error);
+    }
+}
+
+/* ============================
+   LOGIN
+============================ */
+async function hacerLogin() {
+    const emailOrUsername = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    const resp = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailOrUsername, password })
+    });
+
+    const data = await resp.json();
+    if (resp.ok) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("username", data.username);
+        actualizarEstadoAuth();
+    } else {
+        alert(data.error);
+    }
+}
+
+/* ============================
+   LOGOUT
+============================ */
+function cerrarSesion() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    currentGeoJSON = null;
+    parcelaSeleccionadaId = null;
+    actualizarEstadoAuth();
+}
+
+/* ============================
+   MAPA
+============================ */
+function inicializarMapa() {
+    if (map) return;
+
+    map = L.map('map').setView([40.0, -3.5], 6);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    L.tileLayer.wms("https://sigpac.mapa.es/fega/servicios/wms", {
+        layers: "PARCELA",
+        format: "image/png",
+        transparent: true
+    }).addTo(map);
+
+    drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    const drawControl = new L.Control.Draw({
+        edit: { featureGroup: drawnItems },
+        draw: { polygon: true, rectangle: false, circle: false, marker: false }
+    });
+
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, function (event) {
+        drawnItems.clearLayers();
+        const layer = event.layer;
+        drawnItems.addLayer(layer);
+        currentGeoJSON = layer.toGeoJSON();
+        calcularArea(layer);
+    });
+}
+
+function calcularArea(layer) {
+    const area_m2 = turf.area(layer.toGeoJSON());
+    document.getElementById("area").innerText = (area_m2 / 10000).toFixed(2);
+}
+
+/* ============================
+   SIGPAC INFO
+============================ */
+async function obtenerInfoSIGPAC(geojson) {
+    const centro = turf.center(geojson).geometry.coordinates;
+    const lon = centro[0], lat = centro[1];
+    const bbox = `${lon-0.0005},${lat-0.0005},${lon+0.0005},${lat+0.0005}`;
+
+    const url = `https://sigpac.mapa.es/fega/servicios/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=PARCELA&QUERY_LAYERS=PARCELA&INFO_FORMAT=application/json&FEATURE_COUNT=1&CRS=EPSG:4326&BBOX=${bbox}&WIDTH=101&HEIGHT=101&I=50&J=50`;
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (!data.features || data.features.length === 0)
+        return { provincia: null, municipio: null };
+
+    const props = data.features[0].properties;
+    return {
+        provincia: props.PROVINCIA,
+        municipio: props.MUNICIPIO
+    };
+}
+
+/* ============================
+   GUARDAR PARCELA
+============================ */
+async function guardarParcela() {
+    if (!currentGeoJSON) {
+        alert("Dibuja una parcela primero");
+        return;
+    }
+
+    const nombre = prompt("Nombre de la parcela:");
+    if (!nombre) return;
+
+    const sigpac = await obtenerInfoSIGPAC(currentGeoJSON);
+
+    const resp = await fetch("/api/parcelas", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("token")
+        },
+        body: JSON.stringify({
+            nombre,
+            provincia: sigpac.provincia,
+            municipio: sigpac.municipio,
+            cultivo: "Desconocido",
+            superficie: document.getElementById("area").innerText,
+            geometria: currentGeoJSON
+        })
+    });
+
+    if (resp.ok) alert("Parcela guardada");
+    else alert("Error al guardar");
+}
+
+/* ============================
+   LISTAR PARCELAS
+============================ */
+async function cargarParcelas() {
+    mostrarVista('parcelas');
+
+    const cont = document.getElementById('parcelas-container');
+    cont.innerHTML = "<p>Cargando...</p>";
+
+    const resp = await fetch("/api/parcelas", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+    });
+
+    const data = await resp.json();
+    cont.innerHTML = "";
+
+    data.parcelas.forEach(p => {
+        const card = document.createElement("div");
+        card.className = "parcela-card";
+
+        card.innerHTML = `
+            <img src="/static/img/marker-parcela.png">
+            <h3>${p.nombre}</h3>
+            <p><strong>Provincia:</strong> ${p.provincia || "—"}</p>
+            <p><strong>Municipio:</strong> ${p.municipio || "—"}</p>
+            <p><strong>Superficie:</strong> ${p.superficie} ha</p>
+            <button onclick="verParcela(${p.id})">Ver detalles</button>
+        `;
+
+        cont.appendChild(card);
+    });
+}
+
+/* ============================
+   VER DETALLES
+============================ */
+async function verParcela(id) {
+    parcelaSeleccionadaId = id;
+    mostrarVista('app');
+
+    const resp = await fetch(`/api/parcelas/${id}/datos_completos`, {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+    });
+
+    const data = await resp.json();
+
+    document.getElementById('detalle-parcela').innerText =
+        `Parcela: ${data.parcela} | Provincia: ${data.data.info_sigpac.provincia}`;
+
+    const lluvia = data.data.graficos.diario[0].v;
+
+    let icono = "/static/img/marker-clima-sol.png";
+    if (lluvia > 0) icono = "/static/img/marker-clima-lluvia.png";
+
+    document.getElementById('lluvia-info').innerHTML = `
+        <h4>Lluvia hoy</h4>
+        <img src="${icono}" style="width:50px;">
+        <p>${lluvia} mm</p>
+    `;
+}
+
+document.addEventListener('DOMContentLoaded', actualizarEstadoAuth);
+</script>
 
 </body>
 </html>
-``
