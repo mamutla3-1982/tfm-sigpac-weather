@@ -1,18 +1,14 @@
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-import os, json, jwt, requests
-from datetime import datetime, timedelta
+import os, json, jwt
 from functools import wraps
 
-# --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 app = Flask(__name__)
 
+# --- CONFIGURACIÓN ---
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'agro_2026_key')
 app.config['JWT_SECRET'] = os.environ.get('JWT_SECRET', 'jwt_agro_2026')
-app.config['AEMET_API_KEY'] = os.environ.get('AEMET_API_KEY', '')
-
-# Conexión DB (SQLite local / PostgreSQL en Render)
 uri = os.environ.get('DATABASE_URL', 'sqlite:///sigpac.db')
 if uri.startswith("postgres://"): uri = uri.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
@@ -20,7 +16,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# --- 2. MODELOS DE DATOS (ORIGINALES) ---
+# --- MODELOS (Multiusuario + Parcelas) ---
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -36,12 +32,12 @@ class Parcela(db.Model):
     municipio = db.Column(db.String(100))
     cultivo = db.Column(db.String(100))
     superficie = db.Column(db.Float)
-    centroide = db.Column(db.Text)
+    geometria = db.Column(db.Text) # Almacena el polígono dibujado
 
 with app.app_context():
     db.create_all()
 
-# --- 3. MIDDLEWARE DE AUTENTICACIÓN ---
+# --- AUTH MIDDLEWARE ---
 def login_requerido(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -53,69 +49,53 @@ def login_requerido(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- 4. RUTAS DE LA API ---
-
+# --- RUTAS ---
 @app.route('/')
-def index(): 
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route('/api/auth/registro', methods=['POST'])
 def registro():
     data = request.json
-    # AUMENTO: Confirmación de contraseña
     if data['password'] != data.get('confirm_password'):
         return jsonify({'error': 'Las contraseñas no coinciden'}), 400
     if Usuario.query.filter_by(email=data['email']).first(): 
         return jsonify({'error': 'Email ya existe'}), 400
-    
     u = Usuario(username=data['username'], email=data['email'], 
                 password=generate_password_hash(data['password']))
     db.session.add(u); db.session.commit()
-    token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
-    return jsonify({'token': token, 'username': u.username}), 201
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    data = request.json
-    u = Usuario.query.filter((Usuario.email == data['emailOrUsername']) | (Usuario.username == data['emailOrUsername'])).first()
-    if u and check_password_hash(u.password, data['password']):
-        token = jwt.encode({'user_id': u.id}, app.config['JWT_SECRET'])
-        return jsonify({'token': token, 'username': u.username})
-    return jsonify({'error': 'Credenciales incorrectas'}), 401
+    return jsonify({'token': jwt.encode({'user_id': u.id}, app.config['JWT_SECRET']), 'username': u.username}), 201
 
 @app.route('/api/parcelas', methods=['GET', 'POST'])
 @login_requerido
 def gestionar_parcelas():
     if request.method == 'POST':
         data = request.json
-        p = Parcela(user_id=request.current_user_id, nombre=data['nombre'], provincia=data['provincia'],
-                    municipio=data['municipio'], cultivo=data['cultivo'], superficie=data['superficie'],
-                    centroide=json.dumps(data['centroide']))
+        p = Parcela(user_id=request.current_user_id, nombre=data['nombre'], 
+                    provincia=data['provincia'], municipio=data['municipio'], 
+                    cultivo=data['cultivo'], superficie=data['superficie'],
+                    geometria=json.dumps(data['geometria']))
         db.session.add(p); db.session.commit()
         return jsonify({'id': p.id}), 201
     
     parcelas = Parcela.query.filter_by(user_id=request.current_user_id).all()
-    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'cultivo': x.cultivo} for x in parcelas]})
+    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'provincia': x.provincia} for x in parcelas]})
 
-# AUMENTO: Ruta para arronar datos completos (SIGPAC + 4 Gráficos + Alerta)
 @app.route('/api/parcelas/<int:id>/datos_completos', methods=['GET'])
 @login_requerido
 def datos_completos(id):
-    p = Parcela.query.filter_by(id=id, user_id=request.current_user_id).first_or_404()
-    
-    # Simulación de datos meteorológicos (AEMET/Mateo)
-    lluvia_hoy = 12.5 
-    alerta = "⚠️ RIESGO DE ESCORRENTÍA" if lluvia_hoy > 10 else "Normal"
-
+    p = Parcela.query.get_or_404(id)
     return jsonify({
         "parcela": p.nombre,
         "data": {
-            "info_sigpac": {
-                "provincia": p.provincia,
-                "municipio": p.municipio,
-                "cultivo": p.cultivo,
-                "superficie": p.superficie
-            },
+            "info_sigpac": {"provincia": p.provincia, "municipio": p.municipio, "cultivo": p.cultivo, "superficie": p.superficie},
             "graficos": {
-                "diario": [{"f": "08h", "v": 2.1}, {"f": "14h", "v": 8.4}, {"f": "20h", "v": 2.0}],
-                "mensual": [{"f": "Sem 1", "
+                "diario": [{"f": "08h", "v": 2}, {"f": "20h", "v": 5}],
+                "mensual": [{"f": "Sem 1", "v": 20}, {"f": "Sem 2", "v": 45}],
+                "anual": [{"f": "2024", "v": 500}, {"f": "2025", "v": 450}],
+                "historico": [{"f": "Media", "v": 480}, {"f": "Actual", "v": 450}]
+            }
+        }
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
