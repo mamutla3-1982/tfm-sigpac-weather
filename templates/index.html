@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agro Weather Master</title>
+    <title>Agro Weather PWA</title>
     <link rel="manifest" href="/manifest.json">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -13,72 +13,53 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
-        :root { --gold: #C8943A; --dark: #0b0d0f; --card: #161b22; }
-        body { margin: 0; background: var(--dark); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        
-        /* PANTALLA INICIO */
-        .hero { 
-            height: 100vh; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80');
-            background-size: cover; position: absolute; z-index: 2000; transition: 0.5s;
-        }
-
-        /* APP LAYOUT */
-        #app-container { display: grid; grid-template-columns: 350px 1fr; height: 100vh; visibility: hidden; }
-        .sidebar { background: var(--card); padding: 20px; overflow-y: auto; border-right: 1px solid #30363d; }
-        #map { height: 100vh; width: 100%; }
-
-        /* COMPONENTES */
+        :root { --gold: #C8943A; --dark: #0b0d0f; }
+        body { margin: 0; background: var(--dark); color: white; font-family: sans-serif; }
+        .hero { height: 100vh; background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2000'); background-size: cover; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        #app-container { display: none; grid-template-columns: 350px 1fr; height: 100vh; }
+        .sidebar { background: #161b22; padding: 20px; overflow-y: auto; border-right: 1px solid #30363d; }
+        #map { width: 100%; height: 100vh; }
+        input { width: 100%; padding: 10px; margin: 5px 0; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; background: var(--gold); color: black; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 5px; }
         .card-parcela { background: #21262d; border: 1px solid #30363d; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; }
-        .card-parcela:hover { border-color: var(--gold); }
-        input { width: 100%; padding: 10px; margin: 8px 0; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; background: var(--gold); color: black; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        .btn-logout { background: #da3633; color: white; width: auto; padding: 5px 15px; position: absolute; top: 10px; right: 10px; z-index: 3000; }
-        
-        canvas { margin-top: 20px; background: #0d1117; border-radius: 5px; padding: 5px; }
     </style>
 </head>
 <body>
 
-    <button id="logout-btn" class="btn-logout" style="display:none;" onclick="logout()">Cerrar Sesión</button>
-
     <div id="hero-screen" class="hero">
-        <h1 style="color: var(--gold); font-size: 3rem; margin-bottom: 0;">AGRO WEATHER</h1>
-        <p>Meteorología aplicada y conexión SIGPAC</p>
-        
-        <div id="auth-box" style="width: 320px; background: rgba(22,27,34,0.9); padding: 20px; border-radius: 10px;">
+        <h1 style="color: var(--gold);">AGRO WEATHER</h1>
+        <div id="auth-box" style="width: 300px;">
             <div id="login-form">
-                <input type="text" id="l-user" placeholder="Email o Usuario">
+                <input type="text" id="l-user" placeholder="Usuario">
                 <input type="password" id="l-pass" placeholder="Contraseña">
-                <button onclick="ejecutarAuth('login')">Iniciar Sesión</button>
-                <p onclick="cambiarAuth(true)" style="font-size: 12px; text-align: center; cursor: pointer;">¿Nuevo usuario? Regístrate aquí</p>
+                <button onclick="auth('login')">Entrar</button>
+                <p onclick="toggleA(true)" style="cursor:pointer; font-size:12px;">¿No tienes cuenta? Registro</p>
             </div>
             <div id="register-form" style="display:none;">
-                <input type="text" id="r-user" placeholder="Nombre de Usuario">
-                <input type="email" id="r-mail" placeholder="Correo">
+                <input type="text" id="r-user" placeholder="Usuario">
+                <input type="email" id="r-mail" placeholder="Email">
                 <input type="password" id="r-pass" placeholder="Contraseña">
-                <input type="password" id="r-conf" placeholder="Confirmar Contraseña">
-                <button onclick="ejecutarAuth('registro')">Crear Cuenta</button>
-                <p onclick="cambiarAuth(false)" style="font-size: 12px; text-align: center; cursor: pointer;">¿Ya tienes cuenta? Entra</p>
+                <input type="password" id="r-conf" placeholder="Confirmar">
+                <button onclick="auth('registro')">Registrar</button>
+                <p onclick="toggleA(false)" style="cursor:pointer; font-size:12px;">¿Ya tienes cuenta? Login</p>
             </div>
         </div>
     </div>
 
     <div id="app-container">
         <div class="sidebar">
-            <h2 style="color: var(--gold);">Mis Parcelas</h2>
+            <button onclick="logout()" style="background:#da3633; color:white;">Cerrar Sesión</button>
+            <h2>Mis Parcelas</h2>
             <div id="lista-parcelas"></div>
-            <hr style="border-color: #30363d; margin: 20px 0;">
-            <h3>Dibujar Parcela</h3>
-            <input type="text" id="p-nom" placeholder="Nombre de parcela">
-            <input type="text" id="p-pro" placeholder="Provincia (SIGPAC)" readonly>
-            <input type="text" id="p-mun" placeholder="Municipio" readonly>
-            <input type="text" id="p-cul" placeholder="Cultivo (ej. Olivar)">
-            <button onclick="guardarParcela()">Guardar Polígono</button>
-
-            <div id="detalles-parcela" style="display:none; margin-top: 30px; border-top: 2px solid var(--gold);">
-                <h3 id="det-nom" style="color: var(--gold);"></h3>
-                <div id="det-texto" style="font-size: 14px; margin-bottom: 10px;"></div>
+            <hr>
+            <h3>Nueva Parcela</h3>
+            <input type="text" id="p-nom" placeholder="Nombre">
+            <input type="text" id="p-pro" placeholder="Provincia (Auto)" readonly>
+            <input type="text" id="p-mun" placeholder="Municipio (Auto)" readonly>
+            <input type="text" id="p-cul" placeholder="Cultivo">
+            <button onclick="saveP()">Guardar Dibujo</button>
+            <div id="detalles" style="display:none; margin-top:20px;">
+                <h3 id="det-tit" style="color: var(--gold);"></h3>
                 <canvas id="chartDiario"></canvas>
                 <canvas id="chartMensual"></canvas>
                 <canvas id="chartAnual"></canvas>
@@ -91,37 +72,23 @@
     <script>
         let map, drawnItems, currentGeom, charts = {};
 
-        // 1. GESTIÓN DE SESIÓN
-        function cambiarAuth(esReg) {
-            document.getElementById('login-form').style.display = esReg ? 'none' : 'block';
-            document.getElementById('register-form').style.display = esReg ? 'block' : 'none';
-        }
+        function toggleA(r) { document.getElementById('login-form').style.display = r?'none':'block'; document.getElementById('register-form').style.display = r?'block':'none'; }
+        function logout() { localStorage.clear(); location.reload(); }
 
-        async function ejecutarAuth(tipo) {
-            const esLogin = tipo === 'login';
-            const body = esLogin ? 
-                { emailOrUsername: id('l-user').value, password: id('l-pass').value } :
-                { username: id('r-user').value, email: id('r-mail').value, password: id('r-pass').value, confirm_password: id('r-conf').value };
-
-            const res = await fetch(`/api/auth/${tipo}`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(body)
-            });
+        async function auth(t) {
+            const body = t==='login' ? { emailOrUsername: id('l-user').value, password: id('l-pass').value } : 
+                         { username: id('r-user').value, email: id('r-mail').value, password: id('r-pass').value, confirm_password: id('r-conf').value };
+            const res = await fetch(`/api/auth/${t}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
             const data = await res.json();
-            if (data.token) {
-                localStorage.setItem('token', data.token);
-                location.reload();
-            } else { alert(data.error); }
+            if(data.token) { localStorage.setItem('token', data.token); location.reload(); } else { alert(data.error); }
         }
 
-        // 2. INICIALIZACIÓN DE APP
         window.onload = () => {
-            if (localStorage.getItem('token')) {
-                document.getElementById('hero-screen').style.display = 'none';
-                document.getElementById('app-container').style.visibility = 'visible';
-                document.getElementById('logout-btn').style.display = 'block';
+            if(localStorage.getItem('token')) {
+                id('hero-screen').style.display = 'none';
+                id('app-container').style.display = 'grid';
                 initMap();
-                cargarParcelas();
+                loadP();
             }
         };
 
@@ -130,72 +97,45 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             drawnItems = new L.FeatureGroup();
             map.addLayer(drawnItems);
-            const drawControl = new L.Control.Draw({
-                draw: { polygon: true, marker: false, circle: false, polyline: false, rectangle: true }
-            });
-            map.addControl(drawControl);
-
+            new L.Control.Draw({ draw: { polygon: true, marker: false, circle: false, polyline: false, rectangle: true } }).addTo(map);
             map.on(L.Draw.Event.CREATED, (e) => {
                 drawnItems.clearLayers();
                 drawnItems.addLayer(e.layer);
                 currentGeom = e.layer.toGeoJSON();
-                // Simulación de respuesta SIGPAC tras dibujo
                 id('p-pro').value = "Madrid"; id('p-mun').value = "Getafe";
             });
         }
 
-        // 3. PARCELAS Y GRÁFICOS
-        async function guardarParcela() {
-            if (!currentGeom) return alert("Dibuja la parcela en el mapa primero");
-            const data = {
-                nombre: id('p-nom').value, provincia: id('p-pro').value, 
-                municipio: id('p-mun').value, cultivo: id('p-cul').value,
-                superficie: 1.2, geometria: currentGeom
-            };
-            await fetch('/api/parcelas', {
-                method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token')},
-                body: JSON.stringify(data)
-            });
-            location.reload();
+        async function saveP() {
+            const body = { nombre: id('p-nom').value, provincia: id('p-pro').value, municipio: id('p-mun').value, cultivo: id('p-cul').value, superficie: 1.0, geometria: currentGeom };
+            await fetch('/api/parcelas', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+localStorage.getItem('token')}, body: JSON.stringify(body) });
+            loadP();
         }
 
-        async function cargarParcelas() {
-            const res = await fetch('/api/parcelas', { headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')} });
-            const data = await res.json();
-            id('lista-parcelas').innerHTML = data.parcelas.map(p => `
-                <div class="card-parcela" onclick="verDetalles(${p.id})">
-                    <b>${p.nombre}</b><br><small>${p.provincia}</small>
-                </div>
-            `).join('');
+        async function loadP() {
+            const res = await fetch('/api/parcelas', { headers: {'Authorization': 'Bearer '+localStorage.getItem('token')} });
+            const d = await res.json();
+            id('lista-parcelas').innerHTML = d.parcelas.map(p => `<div class="card-parcela" onclick="verD(${p.id})"><b>${p.nombre}</b></div>`).join('');
         }
 
-        async function verDetalles(pid) {
-            const res = await fetch(`/api/parcelas/${pid}/datos_completos`, { headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')} });
+        async function verD(idP) {
+            const res = await fetch(`/api/parcelas/${idP}/datos_completos`, { headers: {'Authorization': 'Bearer '+localStorage.getItem('token')} });
             const r = await res.json();
-            id('detalles-parcela').style.display = 'block';
-            id('det-nom').innerText = r.parcela;
-            id('det-texto').innerHTML = `Provincia: ${r.data.info_sigpac.provincia}<br>Cultivo: ${r.data.info_sigpac.cultivo}`;
-            
-            pintar('chartDiario', 'Lluvia Hoy (mm)', r.data.graficos.diario, '#C8943A');
-            pintar('chartMensual', 'Mes (mm)', r.data.graficos.mensual, '#2ecc71');
-            pintar('chartAnual', 'Año (mm)', r.data.graficos.anual, '#3498db');
+            id('detalles').style.display = 'block';
+            id('det-tit').innerText = r.parcela;
+            pintar('chartDiario', 'Diario', r.data.graficos.diario, '#C8943A');
+            pintar('chartMensual', 'Mensual', r.data.graficos.mensual, '#2ecc71');
+            pintar('chartAnual', 'Anual', r.data.graficos.anual, '#3498db');
             pintar('chartHist', 'Histórico', r.data.graficos.historico, '#e74c3c');
         }
 
-        function pintar(cid, label, puntos, color) {
-            if (charts[cid]) charts[cid].destroy();
-            charts[cid] = new Chart(id(cid), {
-                type: 'line',
-                data: { labels: puntos.map(p=>p.f), datasets: [{ label: label, data: puntos.map(p=>p.v), borderColor: color, tension: 0.3 }] },
-                options: { scales: { y: { ticks: {color: 'white'} }, x: { ticks: {color: 'white'} } } }
-            });
+        function pintar(cid, l, p, c) {
+            if(charts[cid]) charts[cid].destroy();
+            charts[cid] = new Chart(id(cid), { type: 'line', data: { labels: p.map(x=>x.f), datasets: [{ label: l, data: p.map(x=>x.v), borderColor: c }] } });
         }
 
         function id(i) { return document.getElementById(i); }
-        function logout() { localStorage.clear(); location.reload(); }
-
-        // Service Worker para instalación nativa
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/service-worker.js'); }
     </script>
 </body>
-</html>ç
+</html>
