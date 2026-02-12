@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text # Para arreglar la base de datos
 from werkzeug.security import generate_password_hash, check_password_hash
 import os, json, jwt
 from functools import wraps
@@ -15,15 +16,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-
-# --- RUTAS PWA ---
-@app.route('/manifest.json')
-def serve_manifest():
-    return send_from_directory('static', 'manifest.json')
-
-@app.route('/service-worker.js')
-def serve_sw():
-    return send_from_directory('static', 'service-worker.js')
 
 # --- MODELOS ---
 class Usuario(db.Model):
@@ -41,12 +33,26 @@ class Parcela(db.Model):
     municipio = db.Column(db.String(100))
     cultivo = db.Column(db.String(100))
     superficie = db.Column(db.Float)
-    geometria = db.Column(db.Text) # Aquí se guarda el dibujo del mapa
+    geometria = db.Column(db.Text) # Esta es la columna que falta en tu Render
 
+# --- AUTO-CORRECCIÓN DE BASE DE DATOS ---
 with app.app_context():
-    # Si quieres resetear la base de datos para arreglar el error de la columna:
-    # db.drop_all() 
     db.create_all()
+    # Este bloque detecta si falta la columna y la añade por ti:
+    try:
+        db.session.execute(text('ALTER TABLE parcela ADD COLUMN geometria TEXT'))
+        db.session.commit()
+        print("Columna 'geometria' añadida con éxito.")
+    except Exception as e:
+        db.session.rollback()
+        print("La columna ya existía o hubo un error menor:", e)
+
+# --- RUTAS PWA ---
+@app.route('/manifest.json')
+def serve_manifest(): return send_from_directory('static', 'manifest.json')
+
+@app.route('/service-worker.js')
+def serve_sw(): return send_from_directory('static', 'service-worker.js')
 
 # --- AUTH MIDDLEWARE ---
 def login_requerido(f):
@@ -60,7 +66,7 @@ def login_requerido(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- RUTAS ---
+# --- RUTAS API ---
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -97,7 +103,7 @@ def gestionar_parcelas():
         return jsonify({'id': p.id}), 201
     
     parcelas = Parcela.query.filter_by(user_id=request.current_user_id).all()
-    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre} for x in parcelas]})
+    return jsonify({'parcelas': [{'id': x.id, 'nombre': x.nombre, 'provincia': x.provincia} for x in parcelas]})
 
 @app.route('/api/parcelas/<int:id>/datos_completos', methods=['GET'])
 @login_requerido
