@@ -4,7 +4,11 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 # Base de datos local SQLite
 DATABASE_URL = "sqlite:///sigpac.db"
 
-engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    connect_args={"check_same_thread": False}
+)
 
 Base = declarative_base()
 SessionLocal = sessionmaker(bind=engine)
