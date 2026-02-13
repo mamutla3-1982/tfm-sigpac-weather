@@ -1,9 +1,8 @@
 from sqlalchemy import create_engine, Column, Integer, String, JSON, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-import os
 
-# Leer la URL desde Render
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Base de datos local SQLite
+DATABASE_URL = "sqlite:///sigpac.db"
 
 engine = create_engine(DATABASE_URL, echo=False)
 
